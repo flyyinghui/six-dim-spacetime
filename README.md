@@ -1,9 +1,10 @@
 # six-dim-spacetime
 Large-scale extrapolation of the universe under six-dimensional manifold space-time theory and three-dimensional time-charge conservation
 
-# 六维流形时空模型下宇宙时空演化流程梳理
+# 六维流形时空模型下宇宙时空演化流程 Spatio-temporal evolutionary flow of the universe under the six-dimensional manifold spacetime model
 **主要结论**
 本流程由七大步骤组成：模型初始化 → 节点生成 → 超边创建 → 物理量更新 → 重写规则应用 → 超图演化 → 可视化与统计。其中每步的计算模型、输入/输出参数及其对应的六维流形时空理论（M₆）数学描述如下。
+This process consists of seven major steps: model initialization → node generation → hyperedge creation → physical quantity update → rewrite rule application → hypergraph evolution → visualization and statistics. In each of these steps, the computational model, input/output parameters and their corresponding six-dimensional manifold spacetime theory (M₆) are mathematically described as follows
 
 ## 1. 模型初始化（`__init__`）
 **计算模型**

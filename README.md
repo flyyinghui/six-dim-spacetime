@@ -44,7 +44,7 @@ M₆坐标 ξA=(x,y,z,t₁,t₂,t₃)；
 子时空度规：
 - 地球子时空 SEarth：闵可夫斯基度规 ds²=–c²dt₁²+dx²+dy²+dz²
 - 黑洞子时空 SBlackHole：ds²=–gₜₜdt₁²+…+gzzdz² (gzz由tₐ,z决定)
-- 暗能量子时空 SDarkEnergy：FLRW类度规 ds²=–c²dt₂²–c²dt₃²+a²(t₂,t₃)dΣ² [^2][^1].
+- 暗能量子时空 SDarkEnergy：FLRW类度规 ds²=–c²dt₂²–c²dt₃²+a²(t₂,t₃)dΣ².
 
 ## 3. 超边创建（`create_hyperedges`）
 **计算模型**
@@ -60,9 +60,9 @@ M₆坐标 ξA=(x,y,z,t₁,t₂,t₃)；
 - `self.hyperedges`数组，含`type`,`nodes`,`strength`
 **对应理论模型**
 超边对应相互作用通道：
-- 因果传输β₍t1₎：J_causal=β₍t1₎(κ_BH–κ_E) [^1]
+- 因果传输β₍t1₎：J_causal=β₍t1₎(κ_BH–κ_E) 
 - 纠缠强度λ₍ent₎：dρ_ent/dt across t₂,t₃
-- 控制势Λ₍control₎：V_control 对地球粒子类型的重写 [^1].
+- 控制势Λ₍control₎：V_control 对地球粒子类型的重写.
 
 ## 4. 物理量更新（`update_physics`）
 **计算模型**
@@ -70,7 +70,7 @@ M₆坐标 ξA=(x,y,z,t₁,t₂,t₃)；
 1. **引力**：ΔE, 位置微拖拽 ∝strength·M_BH/d²
 2. **量子纠缠**：信息存储`info_storage`与`control_info`交换
 3. **粒子控制**：地球质量微调 ∝strength·control_info
-4. **黑洞吸收**：地球节点质量80%加至BH，20%转暗能量
+4. **黑洞吸收**：地球节点质量70%加至BH，30%转暗能量
 5. **位置更新**：合力=引力+膨胀力(暗能量·distance)
 6. **动态κ更新**：基线1.0+邻居BH·0.02+DE·0.01
 **输入数据**
@@ -82,7 +82,7 @@ M₆坐标 ξA=(x,y,z,t₁,t₂,t₃)；
 **对应理论模型**
 - 引力场方程：G_μν+Λ_Trinity = (8πG/c⁴)T_μνTotal；
 - 暗能量膨胀力：expansion=0.01·energy_DE·distance；
-- Kuhn–BlackHole吸收模型：质量守恒与转换比 [^1].
+- Kuhn–BlackHole吸收模型：质量守恒与转换比.
 
 ## 5. 重写规则应用（`apply_rewrite_rules`）
 **计算模型**
@@ -97,8 +97,8 @@ M₆坐标 ξA=(x,y,z,t₁,t₂,t₃)；
 - 修改后`self.hypergraph.edges`, `self.nodes[*]['sphere_radius','position','info_storage','control_info']`
 **对应理论模型**
 超图演化对应M₆中局部子图替换R规则；
-- 球体卷缩：R_sphere=c·√(t₁²+t₂²+t₃²) [^1]
-- 流体膨胀：expansion_factor=1+0.01√(t₂²+t₃²) [^1].
+- 球体卷缩：R_sphere=c·√(t₁²+t₂²+t₃²)
+- 流体膨胀：expansion_factor=1+0.01√(t₂²+t₃²) .
 
 ## 6. 超图演化（`evolve_hypergraph`）
 **计算模型**
@@ -112,7 +112,7 @@ M₆坐标 ξA=(x,y,z,t₁,t₂,t₃)；
 **输出参数列表**
 - 最终`self`含完整历史：`history`，`nodes`,`hyperedges`
 **对应理论模型**
-多路因果图C_multiway生成；时间离散Δτ统一六维流形演化步长 [^2][^1].
+多路因果图C_multiway生成；时间离散Δτ统一六维流形演化步长.
 
 ## 7. 可视化与统计
 **计算模型**
@@ -123,7 +123,7 @@ M₆坐标 ξA=(x,y,z,t₁,t₂,t₃)；
 **输出参数列表**
 - 图形对象`fig_3d`, `fig_stats`；帧图像文件
 **对应理论模型**
-视觉呈现M₆流形下子时空分布与演化；统计揭示质量守恒、耦合动态κ演化等效应 [^1].
+视觉呈现M₆流形下子时空分布与演化；统计揭示质量守恒、耦合动态κ演化等效应.
 
 通过上述梳理，可清晰看到Python实现如何在离散超图计算框架中，逐步模拟六维流形M₆的连续几何与子时空投影及其相互作用。
 

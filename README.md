@@ -2,7 +2,7 @@
 Large-scale extrapolation of the universe under six-dimensional manifold space-time theory and three-dimensional time-charge conservation
 
 # 六维流形时空模型下宇宙时空演化流程 Spatio-temporal evolutionary flow of the universe under the six-dimensional manifold spacetime model
-**主要结论**
+**主要结论**  Main findings
 本流程由七大步骤组成：模型初始化 → 节点生成 → 超边创建 → 物理量更新 → 重写规则应用 → 超图演化 → 可视化与统计。其中每步的计算模型、输入/输出参数及其对应的六维流形时空理论（M₆）数学描述如下。
 This process consists of seven major steps: model initialization → node generation → hyperedge creation → physical quantity update → rewrite rule application → hypergraph evolution → visualization and statistics. In each of these steps, the computational model, input/output parameters and their corresponding six-dimensional manifold spacetime theory (M₆) are mathematically described as follows
 
@@ -26,7 +26,7 @@ $$
 \kappa_{DE}=\kappa_0(1+\alpha_{fluid})
 $$
 
-α₍quantum₎≈ℏ/(mₑcRₑ), α₍sphere₎=(R_compact/R_horizon)², α₍fluid₎=γ²–1 [^1].
+α₍quantum₎≈ℏ/(mₑcRₑ), α₍sphere₎=(R_compact/R_horizon)², α₍fluid₎=γ²–1.
 
 ## 2. 节点生成（`initialize_spacetime_nodes`）
 **计算模型**
@@ -115,7 +115,7 @@ M₆坐标 ξA=(x,y,z,t₁,t₂,t₃)；
 **对应理论模型**
 多路因果图C_multiway生成；时间离散Δτ统一六维流形演化步长.
 
-## 7. 可视化与统计
+## 7. 可视化与统计 （`Visualization and statistics`）
 **计算模型**
 - `create_3d_visualization`：深色3D散点图展示三类节点与部分连接
 - `plot_evolution_statistics`：质量演化、质量比、最终分布、网络统计四图
@@ -126,6 +126,5 @@ M₆坐标 ξA=(x,y,z,t₁,t₂,t₃)；
 **对应理论模型**
 视觉呈现M₆流形下子时空分布与演化；统计揭示质量守恒、耦合动态κ演化等效应.
 
-通过上述梳理，可清晰看到Python实现如何在离散超图计算框架中，逐步模拟六维流形M₆的连续几何与子时空投影及其相互作用。
-
-<div style="text-align: center">⁂</div>
+通过上述流程，在离散的超图计算框架中实现六维流形M₆的连续几何与子时空投影及其宇宙时空演化的精准模拟。
+Through the above process, the accurate simulation of the continuum geometry of the six-dimensional manifold M₆ in relation to the sub-temporal projection and its cosmic spatio-temporal evolution is realized in the framework of discrete hypergraph computation

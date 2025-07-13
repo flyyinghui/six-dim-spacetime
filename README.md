@@ -126,5 +126,18 @@ M₆坐标 ξA=(x,y,z,t₁,t₂,t₃)；
 **对应理论模型**
 视觉呈现M₆流形下子时空分布与演化；统计揭示质量守恒、耦合动态κ演化等效应.
 
+## 8. 扩展 （`Extended modification`）
+**演化规模**
+本代码围绕100个左右黑洞（5-6个黑洞簇群中心）形成星系团来模拟星系、暗能量纤维网络的结构推演，涉及时空尺度在10亿光年尺，类比史隆长城（Sloan Great Wall）；
+This code simulates the structural derivation of galaxies and dark energy fiber networks by forming galaxy clusters around 100 black holes (5-6 black hole cluster centers), 
+involving a spatial and temporal scale of 1 billion light-years, analogous to the Sloan Great Wall. 
+考虑到大规模算力可行性，可扩展到1000-10000亿光年尺度的超大星系团群，涉及500个黑洞簇群中心及巨引力源。同时按照10000万步迭代（1-10亿年），更能反应宇宙的大尺度时空结构及空洞。
+Considering the feasibility of large-scale computational power, it can be scaled up to the mega-galaxy clusters with a scale of 100 billion to 1,000 billion light-years, 
+involving 500 black hole cluster centers and giant gravity sources. At the same time, by iterating in 10,000,000,000 steps (1-1 billion years), the large-scale spatial 
+and temporal structure and voids of the universe can be better reflected.
+
 通过上述流程，在离散的超图计算框架中实现六维流形M₆的连续几何与子时空投影及其宇宙时空演化的精准模拟。
-Through the above process, the accurate simulation of the continuum geometry of the six-dimensional manifold M₆ in relation to the sub-temporal projection and its cosmic spatio-temporal evolution is realized in the framework of discrete hypergraph computation
+Through the above process, the accurate simulation of the continuum geometry of the six-dimensional manifold M₆ in relation to the sub-temporal projection and its cosmic spatio-temporal evolution is realized in the framework of discrete hypergraph computation.
+
+欢迎改进宇宙演化模型及参数，并对代码进行优化和反馈推演结果。
+Improvements to the universe evolution model and parameters are welcome, as well as optimization of the code and feedback on the extrapolation results.

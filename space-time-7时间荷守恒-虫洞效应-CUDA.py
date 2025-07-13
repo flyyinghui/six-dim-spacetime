@@ -1,0 +1,1223 @@
+import os
+import torch
+import cupy as cp
+import numpy as np
+import matplotlib.pyplot as plt
+from mpl_toolkits.mplot3d import Axes3D
+import networkx as nx
+from matplotlib.animation import FuncAnimation
+import random
+from collections import defaultdict
+import math
+from scipy.spatial.distance import pdist, squareform
+from scipy.sparse.csgraph import minimum_spanning_tree
+import csv
+
+# 检查CUDA可用性
+device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+print(f"Using device: {device}")
+
+# 设置随机种子
+np.random.seed(42)
+random.seed(42)
+
+class SixDimensionalSpacetimeHypergraphAdvanced:
+    """
+    升级版六维流形时空超图计算模型
+    实现暗能量-地球子时空虫洞效应和高级几何演化
+    """
+    
+    def __init__(self, n_earth=80000, n_blackhole=80, n_darkenergy=2500):
+        self.n_earth = n_earth
+        self.n_blackhole = n_blackhole
+        self.n_darkenergy = n_darkenergy
+        
+        # 基础物理参数
+        self.kappa_0 = 1.0
+        self.alpha_quantum = 1e-36
+        self.alpha_sphere = 1e-36
+        self.alpha_fluid = 1.0
+        
+        # 时间荷守恒参数
+        self.beta_t1 = 0.1  # t1因果传输系数
+        self.lambda_ent = 0.5  # t2,t3纠缠传输系数
+        self.tau_threshold = 0.05  # 守恒阈值
+        
+        # 虫洞效应参数
+        self.wormhole_strength = 0.2
+        self.negative_energy_density = -0.1
+        self.traversability_factor = 0.8
+        
+        # 暗能量几何参数
+        self.gamma_2 = 1.0  # t2时间流体张量
+        self.gamma_3 = 1.0  # t3时间流体张量
+        self.epsilon_2 = 0.1  # t2耦合强度
+        self.epsilon_3 = 0.1  # t3耦合强度
+        
+        # Wolfram超图重写参数
+        self.rewrite_rules = {
+            'geometric_expansion': 1.02,
+            'topological_fusion': 0.98,
+            'information_diffusion': 0.15,
+            'causal_propagation': 0.25
+        }
+        
+        # 数据结构初始化
+        self.hypergraph = nx.Graph()
+        self.nodes = {}
+        self.hyperedges = []
+        self.wormhole_connections = []
+        self.time_step = 0
+        self.max_iterations = 5000
+        
+        # 历史数据存储
+        self.history = {
+            'positions': [],
+            'connections': [],
+            'energies': [],
+            'masses': [],
+            'wormhole_fluxes': [],
+            'time_charges': []
+        }
+        
+        print(f"高级六维流形时空模型初始化完成")
+        print(f"地球子时空: {n_earth}, 黑洞子时空: {n_blackhole}, 暗能量子时空: {n_darkenergy}")
+
+    def calculate_fluid_coupling_functions(self, x, y):
+        """
+        计算暗能量流体耦合势函数F(x,y)和G(x,y)
+        """
+        # F(x,y): 高斯分布 + 周期调制
+        F = np.exp(-(x**2 + y**2)/10) * np.cos(0.5*np.sqrt(x**2 + y**2))
+        
+        # G(x,y): 双连峰函数 + 旋转场
+        G = (np.exp(-((x-3)**2 + y**2)/5) + np.exp(-((x+3)**2 + y**2)/5)) * np.sin(np.arctan2(y, x))
+        
+        return F, G
+
+    def calculate_spacetime_metric(self, position, node_type):
+        """
+        计算六维时空度规张量
+        """
+        x, y, z = position
+        
+        if node_type == 'darkenergy':
+            # 暗能量子时空: ds² = dx² + dy² - γ₂dt₂² - γ₃dt₃² - 2ε₂F(x,y)dt₂dy - 2ε₃G(x,y)dt₃dx
+            F, G = self.calculate_fluid_coupling_functions(x, y)
+            
+            metric = np.array([
+                [1, 0, -self.epsilon_3 * G],
+                [0, 1, -self.epsilon_2 * F],
+                [-self.epsilon_3 * G, -self.epsilon_2 * F, 1],
+                [0, 0, 0],
+                [0, -self.epsilon_2 * F, -self.gamma_2],
+                [-self.epsilon_3 * G, 0, -self.gamma_3]
+            ])
+            
+        elif node_type == 'earth':
+            # 地球子时空: 标准4维时空 + 因果修正
+            causal_correction = self.beta_t1 * np.exp(-np.linalg.norm(position)/10)
+            
+            metric = np.array([
+                [1, 0, 0],
+                [0, 1, 0],
+                [0, 0, 1],
+                [-1 - causal_correction, 0, 0],
+                [0, 0, 0],
+                [0, 0, 0]
+            ])
+            
+        else:  # blackhole
+            # 黑洞子时空: 球体卷缩几何
+            r = np.linalg.norm(position)
+            sphere_factor = 1.0 / (1.0 + r**2/100)
+            
+            metric = np.eye(6)
+            metric[3, 3] = -sphere_factor
+            metric[4, 4] = -sphere_factor
+            metric[5, 5] = -sphere_factor
+            
+        return metric
+
+    def calculate_time_charge_density(self, node_id):
+        """
+        计算节点的三维时间荷密度
+        """
+        node = self.nodes[node_id]
+        mass = node.get('mass', 1.0)
+        tc = node.get('time_coords', [0.0])
+        
+        t1 = tc[0] if len(tc) >= 1 else 0.0
+        t2 = tc[1] if len(tc) >= 2 else 0.0
+        t3 = tc[2] if len(tc) >= 3 else 0.0
+        
+        if node['type'] == 'earth':
+            return np.array([mass * t1, 0.0, 0.0])
+        elif node['type'] == 'blackhole':
+            return np.array([mass * t1, mass * t2, mass * t3])
+        elif node['type'] == 'darkenergy':
+            return np.array([0.0, mass * t2, mass * t3])
+        else:
+            return np.zeros(3)
+
+    def get_total_time_charge(self):
+        """
+        计算全局时间荷总量
+        """
+        total = np.zeros(3)
+        for nid in self.nodes:
+            total += self.calculate_time_charge_density(nid)
+        return total
+
+    def detect_wormhole_conditions(self, earth_node, de_node):
+        """
+        检测虫洞形成条件
+        """
+        earth_pos = self.nodes[earth_node]['position']
+        de_pos = self.nodes[de_node]['position']
+        
+        # 计算空间距离
+        spatial_distance = np.linalg.norm(earth_pos - de_pos)
+        
+        # 计算时间荷差异
+        earth_charge = self.calculate_time_charge_density(earth_node)
+        de_charge = self.calculate_time_charge_density(de_node)
+        charge_gradient = np.linalg.norm(earth_charge - de_charge)
+        
+        # 计算度规曲率
+        earth_metric = self.calculate_spacetime_metric(earth_pos, 'earth')
+        de_metric = self.calculate_spacetime_metric(de_pos, 'darkenergy')
+        metric_curvature = np.linalg.norm(earth_metric - de_metric)
+        
+        # 虫洞形成判据
+        wormhole_probability = (charge_gradient * metric_curvature) / (spatial_distance + 1e-6)
+        
+        return wormhole_probability > self.wormhole_strength
+
+    def create_wormhole_connection(self, earth_node, de_node):
+        """
+        创建虫洞连接
+        """
+        wormhole = {
+            'earth_node': earth_node,
+            'de_node': de_node,
+            'throat_radius': np.random.uniform(0.5, 2.0),
+            'negative_energy': self.negative_energy_density,
+            'flux_capacity': np.random.uniform(0.1, 0.5),
+            'stability': self.traversability_factor,
+            'creation_time': self.time_step
+        }
+        
+        self.wormhole_connections.append(wormhole)
+        
+        # 在超图中添加虫洞连接
+        self.hypergraph.add_edge(earth_node, de_node, 
+                                edge_type='wormhole',
+                                weight=wormhole['flux_capacity'])
+        
+        return wormhole
+
+    def update_wormhole_dynamics(self):
+        """
+        更新虫洞动力学
+        """
+        active_wormholes = []
+        
+        for wormhole in self.wormhole_connections:
+            earth_node = wormhole['earth_node']
+            de_node = wormhole['de_node']
+            
+            # 检查节点是否仍存在
+            if earth_node not in self.nodes or de_node not in self.nodes:
+                continue
+                
+            # 计算虫洞稳定性
+            age = self.time_step - wormhole['creation_time']
+            stability_decay = np.exp(-age * 0.01)
+            wormhole['stability'] *= stability_decay
+            
+            # 如果稳定性过低，虫洞坍缩
+            if wormhole['stability'] < 0.1:
+                if self.hypergraph.has_edge(earth_node, de_node):
+                    self.hypergraph.remove_edge(earth_node, de_node)
+                continue
+            
+            # 计算质量-能量流
+            earth_mass = self.nodes[earth_node]['mass']
+            de_energy = self.nodes[de_node]['energy']
+            
+            # 虫洞传输效应
+            transfer_rate = wormhole['flux_capacity'] * wormhole['stability']
+            
+            # 地球 → 暗能量的质量转换
+            mass_transfer = earth_mass * transfer_rate * 0.01
+            energy_transfer = mass_transfer * (3e8)**2  # E = mc²
+            
+            self.nodes[earth_node]['mass'] *= (1 - transfer_rate * 0.01)
+            self.nodes[de_node]['energy'] += energy_transfer
+            
+            # 时间荷通过虫洞传输
+            earth_charge = self.calculate_time_charge_density(earth_node)
+            de_charge = self.calculate_time_charge_density(de_node)
+            
+            charge_flow = (earth_charge - de_charge) * transfer_rate * 0.05
+            
+            # 更新时间坐标
+            if len(self.nodes[earth_node]['time_coords']) >= 1:
+                self.nodes[earth_node]['time_coords'][0] -= charge_flow[0] / (earth_mass + 1e-6)
+            
+            if len(self.nodes[de_node]['time_coords']) >= 2:
+                self.nodes[de_node]['time_coords'][0] += charge_flow[1] / (de_energy + 1e-6)
+                self.nodes[de_node]['time_coords'][1] += charge_flow[2] / (de_energy + 1e-6)
+            
+            active_wormholes.append(wormhole)
+        
+        self.wormhole_connections = active_wormholes
+
+    def apply_wolfram_rewrite_rules(self):
+        """
+        应用Wolfram超图重写规则
+        """
+        # 规则1: 几何膨胀重写
+        # {{x,y},{t2,t3}} → {{x',y'},{t2',t3'},{expansion_field}}
+        de_nodes = [n for n, d in self.nodes.items() if d['type'] == 'darkenergy']
+        
+        for de_node in de_nodes:
+            expansion_factor = self.rewrite_rules['geometric_expansion']
+            self.nodes[de_node]['position'] *= expansion_factor
+            
+            # 更新流体速度
+            if 'fluid_velocity' in self.nodes[de_node]:
+                self.nodes[de_node]['fluid_velocity'] *= expansion_factor**0.5
+        
+        # 规则2: 拓扑融合重写
+        # 相近的节点融合成超节点
+        earth_nodes = [n for n, d in self.nodes.items() if d['type'] == 'earth']
+        
+        fusion_candidates = []
+        for i, node1 in enumerate(earth_nodes):
+            for node2 in earth_nodes[i+1:]:
+                if node1 in self.nodes and node2 in self.nodes:
+                    pos1 = self.nodes[node1]['position']
+                    pos2 = self.nodes[node2]['position']
+                    distance = np.linalg.norm(pos1 - pos2)
+                    
+                    if distance < 0.5:  # 融合阈值
+                        fusion_candidates.append((node1, node2, distance))
+        
+        # 执行融合
+        fusion_candidates.sort(key=lambda x: x[2])
+        fused_pairs = set()
+        
+        for node1, node2, _ in fusion_candidates[:min(10, len(fusion_candidates))]:
+            if node1 not in fused_pairs and node2 not in fused_pairs and \
+               node1 in self.nodes and node2 in self.nodes:
+                
+                # 融合节点
+                combined_mass = self.nodes[node1]['mass'] + self.nodes[node2]['mass']
+                combined_energy = self.nodes[node1]['energy'] + self.nodes[node2]['energy']
+                combined_pos = (self.nodes[node1]['position'] + self.nodes[node2]['position']) / 2
+                
+                # 更新第一个节点
+                self.nodes[node1]['mass'] = combined_mass
+                self.nodes[node1]['energy'] = combined_energy
+                self.nodes[node1]['position'] = combined_pos
+                
+                # 移除第二个节点
+                if self.hypergraph.has_node(node2):
+                    self.hypergraph.remove_node(node2)
+                del self.nodes[node2]
+                
+                fused_pairs.add(node1)
+                fused_pairs.add(node2)
+        
+        # 规则3: 信息扩散重写
+        # 通过超边传播信息
+        for hyperedge in self.hyperedges:
+            if hyperedge['type'] == 'quantum_entanglement':
+                diffusion_rate = self.rewrite_rules['information_diffusion']
+                
+                for node in hyperedge['nodes']:
+                    if node in self.nodes and 'info_storage' in self.nodes[node]:
+                        self.nodes[node]['info_storage'] += diffusion_rate
+        
+        # 规则4: 因果传播重写
+        # 更新因果连接强度
+        causal_edges = [(u, v) for u, v, d in self.hypergraph.edges(data=True) 
+                       if d.get('edge_type') == 'gravity']
+        
+        for u, v in causal_edges:
+            if u in self.nodes and v in self.nodes:
+                # 增强因果连接
+                current_weight = self.hypergraph[u][v].get('weight', 0.1)
+                new_weight = current_weight * (1 + self.rewrite_rules['causal_propagation'])
+                self.hypergraph[u][v]['weight'] = min(new_weight, 1.0)
+
+    def generate_cosmic_structure_positions(self):
+        """
+        生成宇宙大尺度结构位置
+        """
+        scale = 20.0
+        
+        # 1. 生成黑洞位置（星系团中心）
+        n_clusters = np.random.randint(5, 7)
+        cluster_centers = np.random.randn(n_clusters, 3) * scale * 5.0
+        
+        blackhole_positions = []
+        for i in range(n_clusters):
+            center = cluster_centers[i]
+            n_bh_in_cluster = min(self.n_blackhole // n_clusters + 
+                                np.random.randint(-2, 3), self.n_blackhole - len(blackhole_positions))
+            
+            if n_bh_in_cluster > 0:
+                # 在星系团内生成黑洞
+                r = np.random.exponential(scale * 0.15, n_bh_in_cluster)
+                theta = np.random.uniform(0, 2*np.pi, n_bh_in_cluster)
+                phi = np.arccos(2*np.random.random(n_bh_in_cluster) - 1)
+                
+                x = r * np.sin(phi) * np.cos(theta)
+                y = r * np.sin(phi) * np.sin(theta)
+                z = r * np.cos(phi)
+                
+                positions = np.column_stack([x, y, z]) + center
+                blackhole_positions.extend(positions)
+                
+                if len(blackhole_positions) >= self.n_blackhole:
+                    break
+        
+        blackhole_positions = np.array(blackhole_positions[:self.n_blackhole])
+        
+        # 2. 生成暗能量纤维网络
+        darkenergy_positions = self._generate_dark_energy_filaments(
+            self.n_darkenergy, blackhole_positions, scale)
+        
+        # 3. 生成地球型物质分布
+        earth_positions = self._generate_earth_matter_distribution(
+            self.n_earth, blackhole_positions, darkenergy_positions, scale)
+        
+        return blackhole_positions, darkenergy_positions, earth_positions
+
+    def _generate_dark_energy_filaments(self, n_points, blackhole_positions, scale):
+        """
+        生成暗能量纤维网络
+        """
+        if len(blackhole_positions) < 2:
+            return np.random.randn(n_points, 3) * scale
+        
+        # 使用Delaunay三角剖分连接黑洞
+        from scipy.spatial import Delaunay
+        
+        try:
+            tri = Delaunay(blackhole_positions)
+            filament_points = []
+            
+            # 沿着三角剖分边生成纤维
+            for simplex in tri.simplices:
+                for i in range(len(simplex)):
+                    for j in range(i+1, len(simplex)):
+                        start = blackhole_positions[simplex[i]]
+                        end = blackhole_positions[simplex[j]]
+                        
+                        # 生成纤维段
+                        n_segments = 20
+                        t_values = np.linspace(0, 1, n_segments)
+                        
+                        for t in t_values:
+                            # 贝塞尔曲线生成弯曲纤维
+                            pos = (1-t) * start + t * end
+                            
+                            # 添加垂直扰动
+                            if 0.1 < t < 0.9:
+                                direction = end - start
+                                perp = np.cross(direction, np.random.randn(3))
+                                perp = perp / (np.linalg.norm(perp) + 1e-6)
+                                pos += perp * np.sin(t * np.pi) * np.linalg.norm(direction) * 0.1
+                            
+                            filament_points.append(pos)
+                            
+                            if len(filament_points) >= n_points:
+                                break
+                        
+                        if len(filament_points) >= n_points:
+                            break
+                    if len(filament_points) >= n_points:
+                        break
+                if len(filament_points) >= n_points:
+                    break
+            
+            # 填充剩余点
+            while len(filament_points) < n_points:
+                if len(filament_points) > 0:
+                    base = random.choice(filament_points)
+                    pos = base + np.random.normal(0, 0.2, 3) * scale
+                else:
+                    pos = np.random.randn(3) * scale
+                filament_points.append(pos)
+            
+            return np.array(filament_points[:n_points])
+            
+        except:
+            # 如果三角剖分失败，使用简单方法
+            return np.random.randn(n_points, 3) * scale
+
+    def _generate_earth_matter_distribution(self, n_points, blackhole_positions, 
+                                          darkenergy_positions, scale):
+        """
+        生成地球型物质分布
+        """
+        positions = []
+        
+        # 60%的点在黑洞周围形成星系
+        n_galaxy = int(n_points * 0.6)
+        if len(blackhole_positions) > 0:
+            for _ in range(n_galaxy):
+                bh_idx = np.random.randint(0, len(blackhole_positions))
+                center = blackhole_positions[bh_idx]
+                
+                # 指数分布径向距离
+                r = np.random.exponential(scale * 0.2)
+                theta = np.random.uniform(0, 2*np.pi)
+                phi = np.arccos(2*np.random.random() - 1)
+                
+                # 添加盘状结构
+                if np.random.random() < 0.7:
+                    phi = np.pi/2 + np.random.normal(0, 0.1)
+                
+                x = r * np.sin(phi) * np.cos(theta)
+                y = r * np.sin(phi) * np.sin(theta)
+                z = r * np.cos(phi) * (0.1 if np.random.random() < 0.7 else 1.0)
+                
+                pos = np.array([x, y, z]) + center
+                positions.append(pos)
+        
+        # 30%的点在暗能量纤维附近
+        n_filament = int(n_points * 0.3)
+        if len(darkenergy_positions) > 0:
+            for _ in range(n_filament):
+                de_idx = np.random.randint(0, len(darkenergy_positions))
+                base = darkenergy_positions[de_idx]
+                
+                # 在纤维附近生成
+                offset = np.random.normal(0, 1, 3) * scale * 0.15
+                pos = base + offset
+                positions.append(pos)
+        
+        # 剩余点随机分布
+        n_remaining = n_points - len(positions)
+        for _ in range(n_remaining):
+            pos = np.random.randn(3) * scale * 2
+            positions.append(pos)
+        
+        return np.array(positions[:n_points])
+
+    def initialize_spacetime_nodes(self):
+        """
+        初始化六维时空节点
+        """
+        print("正在生成宇宙大尺度结构...")
+        blackhole_positions, darkenergy_positions, earth_positions = \
+            self.generate_cosmic_structure_positions()
+        
+        node_id = 0
+        
+        # 创建黑洞节点
+        for i, pos in enumerate(blackhole_positions):
+            self.nodes[node_id] = {
+                'type': 'blackhole',
+                'position': pos,
+                'time_coords': [np.random.uniform(0, 1) for _ in range(3)],
+                'mass': np.random.uniform(50, 200) * (1 + np.exp(-np.linalg.norm(pos)/5)),
+                'energy': 0.0,
+                'kappa': self.kappa_0 * (1 + self.alpha_sphere),
+                'info_storage': 0.0,
+                'sphere_radius': abs(np.random.normal(2, 0.5)) * (1 + np.random.random())
+            }
+            self.hypergraph.add_node(node_id, **self.nodes[node_id])
+            node_id += 1
+        
+        # 创建暗能量节点
+        for i, pos in enumerate(darkenergy_positions):
+            self.nodes[node_id] = {
+                'type': 'darkenergy',
+                'position': pos,
+                'time_coords': [np.random.uniform(0, 1) for _ in range(2)],  # t2, t3
+                'mass': np.random.uniform(0.01, 0.1),
+                'energy': np.random.uniform(0.5, 1.0),
+                'kappa': self.kappa_0 * (1 + self.alpha_fluid),
+                'fluid_velocity': np.random.uniform(0.5, 0.99),
+                'control_info': np.random.uniform(0, 1),
+                'coupling_F': 0.0,  # 将在更新中计算
+                'coupling_G': 0.0
+            }
+            self.hypergraph.add_node(node_id, **self.nodes[node_id])
+            node_id += 1
+        
+        # 创建地球节点
+        for i, pos in enumerate(earth_positions):
+            # 计算到最近黑洞的距离
+            if len(blackhole_positions) > 0:
+                distances = [np.linalg.norm(pos - bh_pos) for bh_pos in blackhole_positions]
+                min_dist = min(distances)
+            else:
+                min_dist = 1.0
+            
+            self.nodes[node_id] = {
+                'type': 'earth',
+                'position': pos,
+                'time_coords': [np.random.uniform(0, 1)],  # t1
+                'mass': np.random.uniform(0.1, 1.0) * (1 + np.exp(-min_dist/5)),
+                'energy': 0.0,
+                'kappa': self.kappa_0 * (1 + self.alpha_quantum),
+                'causal_potential': 0.0
+            }
+            self.hypergraph.add_node(node_id, **self.nodes[node_id])
+            node_id += 1
+        
+        print(f"节点初始化完成，总计 {len(self.nodes)} 个节点")
+
+    def create_hyperedges_and_wormholes(self):
+        """
+        创建超边连接和虫洞
+        """
+        # 获取不同类型节点
+        bh_nodes = [n for n, d in self.nodes.items() if d['type'] == 'blackhole']
+        earth_nodes = [n for n, d in self.nodes.items() if d['type'] == 'earth']
+        de_nodes = [n for n, d in self.nodes.items() if d['type'] == 'darkenergy']
+        
+        # 1. 引力更新超边 (黑洞→地球)
+        for _ in range(min(20, len(bh_nodes))):
+            if not bh_nodes or not earth_nodes:
+                break
+            bh_node = random.choice(bh_nodes)
+            earth_group = random.sample(earth_nodes, min(8, len(earth_nodes)))
+            
+            hyperedge = {
+                'type': 'gravity_update',
+                'nodes': [bh_node] + earth_group,
+                'strength': np.random.uniform(0.2, 1.0)
+            }
+            self.hyperedges.append(hyperedge)
+            
+            for earth_node in earth_group:
+                self.hypergraph.add_edge(bh_node, earth_node,
+                                       edge_type='gravity',
+                                       weight=hyperedge['strength'])
+        
+        # 2. 量子纠缠超边 (黑洞↔暗能量)
+        for _ in range(min(15, len(bh_nodes))):
+            if not bh_nodes or not de_nodes:
+                break
+            bh_node = random.choice(bh_nodes)
+            de_group = random.sample(de_nodes, min(5, len(de_nodes)))
+            
+            hyperedge = {
+                'type': 'quantum_entanglement',
+                'nodes': [bh_node] + de_group,
+                'strength': np.random.uniform(0.5, 1.0)
+            }
+            self.hyperedges.append(hyperedge)
+            
+            for de_node in de_group:
+                self.hypergraph.add_edge(bh_node, de_node,
+                                       edge_type='entanglement',
+                                       weight=hyperedge['strength'])
+        
+        # 3. 粒子控制超边 (暗能量→地球)
+        for _ in range(min(30, len(de_nodes))):
+            if not de_nodes or not earth_nodes:
+                break
+            de_node = random.choice(de_nodes)
+            earth_group = random.sample(earth_nodes, min(15, len(earth_nodes)))
+            
+            hyperedge = {
+                'type': 'particle_control',
+                'nodes': [de_node] + earth_group,
+                'strength': np.random.uniform(0.3, 0.8)
+            }
+            self.hyperedges.append(hyperedge)
+            
+            for earth_node in earth_group:
+                if not self.hypergraph.has_edge(de_node, earth_node):
+                    self.hypergraph.add_edge(de_node, earth_node,
+                                           edge_type='control',
+                                           weight=hyperedge['strength'])
+        
+        # 4. 检测并创建虫洞连接
+        wormhole_count = 0
+        max_wormholes = min(50, len(earth_nodes) // 100, len(de_nodes) // 10)
+        
+        for earth_node in random.sample(earth_nodes, min(200, len(earth_nodes))):
+            if wormhole_count >= max_wormholes:
+                break
+                
+            for de_node in random.sample(de_nodes, min(10, len(de_nodes))):
+                if self.detect_wormhole_conditions(earth_node, de_node):
+                    self.create_wormhole_connection(earth_node, de_node)
+                    wormhole_count += 1
+                    break
+        
+        print(f"超边创建完成: {len(self.hyperedges)} 个超边")
+        print(f"虫洞连接创建: {len(self.wormhole_connections)} 个虫洞")
+
+    def update_physics_advanced(self):
+        """
+        高级物理量更新
+        """
+        # 1. 记录初始时间荷
+        initial_tau = self.get_total_time_charge()
+        
+        # 2. 更新暗能量耦合函数
+        for node_id, node in self.nodes.items():
+            if node['type'] == 'darkenergy':
+                x, y, _ = node['position']
+                F, G = self.calculate_fluid_coupling_functions(x, y)
+                node['coupling_F'] = F
+                node['coupling_G'] = G
+        
+        # 3. 基础物理量更新
+        self._update_gravity_effects()
+        self._update_quantum_entanglement()
+        self._update_particle_control()
+        self._update_darkenergy_expansion()
+        
+        # 4. 虫洞动力学更新
+        self.update_wormhole_dynamics()
+        
+        # 5. 时间荷守恒校正
+        self._enforce_time_charge_conservation(initial_tau)
+        
+        # 6. 应用Wolfram重写规则
+        if self.time_step % 10 == 0:
+            self.apply_wolfram_rewrite_rules()
+        
+        # 7. 更新度规和几何
+        self._update_spacetime_geometry()
+
+    def _update_gravity_effects(self):
+        """
+        更新引力效应
+        """
+        for hyperedge in self.hyperedges:
+            if hyperedge['type'] == 'gravity_update':
+                bh_node = hyperedge['nodes'][0]
+                earth_nodes = hyperedge['nodes'][1:]
+                
+                if bh_node not in self.nodes:
+                    continue
+                
+                bh_mass = self.nodes[bh_node]['mass']
+                bh_pos = self.nodes[bh_node]['position']
+                
+                for earth_node in earth_nodes:
+                    if earth_node not in self.nodes:
+                        continue
+                        
+                    earth_pos = self.nodes[earth_node]['position']
+                    distance = np.linalg.norm(bh_pos - earth_pos) + 1e-6
+                    
+                    # 引力效应
+                    gravity_effect = hyperedge['strength'] * bh_mass / (distance**2)
+                    self.nodes[earth_node]['energy'] += gravity_effect * 0.1
+                    
+                    # 时空弯曲引起的位置变化
+                    direction = (bh_pos - earth_pos) / distance
+                    displacement = direction * gravity_effect * 0.001
+                    self.nodes[earth_node]['position'] += displacement
+                    
+                    # 因果势能更新
+                    causal_potential = self.beta_t1 * (self.nodes[bh_node]['kappa'] - 
+                                                     self.nodes[earth_node]['kappa'])
+                    self.nodes[earth_node]['causal_potential'] = causal_potential
+
+    def _update_quantum_entanglement(self):
+        """
+        更新量子纠缠效应
+        """
+        for hyperedge in self.hyperedges:
+            if hyperedge['type'] == 'quantum_entanglement':
+                bh_node = hyperedge['nodes'][0]
+                de_nodes = hyperedge['nodes'][1:]
+                
+                if bh_node not in self.nodes:
+                    continue
+                
+                bh_info = self.nodes[bh_node].get('info_storage', 0)
+                
+                for de_node in de_nodes:
+                    if de_node not in self.nodes:
+                        continue
+                    
+                    de_info = self.nodes[de_node]['control_info']
+                    
+                    # 量子信息交换
+                    exchange_rate = hyperedge['strength'] * self.lambda_ent * 0.1
+                    
+                    new_bh_info = (bh_info + de_info * exchange_rate) / 2
+                    new_de_info = (de_info + bh_info * exchange_rate) / 2
+                    
+                    self.nodes[bh_node]['info_storage'] = new_bh_info
+                    self.nodes[de_node]['control_info'] = new_de_info
+                    
+                    # 时间荷交换
+                    if len(self.nodes[bh_node]['time_coords']) >= 2 and \
+                       len(self.nodes[de_node]['time_coords']) >= 2:
+                        
+                        # t2分量交换
+                        t2_flow = self.lambda_ent * (self.nodes[bh_node]['time_coords'][1] - 
+                                                   self.nodes[de_node]['time_coords'][0]) * 0.01
+                        
+                        self.nodes[bh_node]['time_coords'][1] -= t2_flow
+                        self.nodes[de_node]['time_coords'][0] += t2_flow
+                        
+                        # t3分量交换
+                        if len(self.nodes[bh_node]['time_coords']) >= 3 and \
+                           len(self.nodes[de_node]['time_coords']) >= 2:
+                            
+                            t3_flow = self.lambda_ent * (self.nodes[bh_node]['time_coords'][2] - 
+                                                       self.nodes[de_node]['time_coords'][1]) * 0.01
+                            
+                            self.nodes[bh_node]['time_coords'][2] -= t3_flow
+                            self.nodes[de_node]['time_coords'][1] += t3_flow
+
+    def _update_particle_control(self):
+        """
+        更新粒子控制效应
+        """
+        for hyperedge in self.hyperedges:
+            if hyperedge['type'] == 'particle_control':
+                de_node = hyperedge['nodes'][0]
+                earth_nodes = hyperedge['nodes'][1:]
+                
+                if de_node not in self.nodes:
+                    continue
+                
+                control_strength = self.nodes[de_node]['control_info']
+                
+                for earth_node in earth_nodes:
+                    if earth_node not in self.nodes:
+                        continue
+                    
+                    # 粒子质量控制
+                    mass_correction = hyperedge['strength'] * control_strength * 0.02
+                    self.nodes[earth_node]['mass'] *= (1 + mass_correction - 0.01)
+                    self.nodes[earth_node]['mass'] = max(0.01, self.nodes[earth_node]['mass'])
+                    
+                    # 时间荷传输 (暗能量→地球)
+                    if len(self.nodes[de_node]['time_coords']) >= 1 and \
+                       len(self.nodes[earth_node]['time_coords']) >= 1:
+                        
+                        charge_transfer = control_strength * hyperedge['strength'] * 0.005
+                        self.nodes[earth_node]['time_coords'][0] += charge_transfer
+
+    def _update_darkenergy_expansion(self):
+        """
+        更新暗能量膨胀效应
+        """
+        de_nodes = [n for n, d in self.nodes.items() if d['type'] == 'darkenergy']
+        
+        for de_node in de_nodes:
+            # 计算膨胀驱动
+            time_coords = self.nodes[de_node]['time_coords']
+            expansion_factor = 1.0 + 0.001 * np.sqrt(sum(t**2 for t in time_coords))
+            
+            # 位置膨胀
+            self.nodes[de_node]['position'] *= expansion_factor
+            
+            # 能量增长
+            self.nodes[de_node]['energy'] *= expansion_factor**0.5
+            
+            # 流体速度演化
+            if 'fluid_velocity' in self.nodes[de_node]:
+                self.nodes[de_node]['fluid_velocity'] = min(0.99, 
+                    self.nodes[de_node]['fluid_velocity'] * expansion_factor**0.1)
+
+    def _enforce_time_charge_conservation(self, initial_tau):
+        """
+        强制时间荷守恒
+        """
+        final_tau = self.get_total_time_charge()
+        drift = np.linalg.norm(final_tau - initial_tau)
+        
+        if drift > self.tau_threshold:
+            # 计算校正比例
+            ratios = np.divide(initial_tau, final_tau + 1e-12, 
+                             out=np.ones_like(initial_tau), where=final_tau!=0)
+            
+            # 应用校正
+            for node_id, node in self.nodes.items():
+                tc = node['time_coords']
+                
+                if node['type'] == 'earth' and len(tc) >= 1:
+                    tc[0] *= ratios[0]
+                elif node['type'] == 'blackhole':
+                    if len(tc) >= 1:
+                        tc[0] *= ratios[0]
+                    if len(tc) >= 2:
+                        tc[1] *= ratios[1]
+                    if len(tc) >= 3:
+                        tc[2] *= ratios[2]
+                elif node['type'] == 'darkenergy':
+                    if len(tc) >= 1:
+                        tc[0] *= ratios[1]  # t2对应ratios[1]
+                    if len(tc) >= 2:
+                        tc[1] *= ratios[2]  # t3对应ratios[2]
+
+    def _update_spacetime_geometry(self):
+        """
+        更新时空几何
+        """
+        for node_id, node in self.nodes.items():
+            # 计算时空曲率
+            metric = self.calculate_spacetime_metric(node['position'], node['type'])
+            curvature = np.trace(metric @ metric.T)
+            
+            # 更新有效耦合常数
+            if node['type'] == 'earth':
+                geometric_correction = 1.0 + curvature * 1e-6
+                node['kappa'] = self.kappa_0 * (1 + self.alpha_quantum) * geometric_correction
+                
+            elif node['type'] == 'darkenergy':
+                fluid_correction = 1.0 + node['fluid_velocity'] * curvature * 1e-4
+                node['kappa'] = self.kappa_0 * (1 + self.alpha_fluid) * fluid_correction
+                
+            elif node['type'] == 'blackhole':
+                sphere_correction = 1.0 + node['sphere_radius'] * curvature * 1e-5
+                node['kappa'] = self.kappa_0 * (1 + self.alpha_sphere) * sphere_correction
+
+    def record_evolution_statistics(self):
+        """
+        记录演化统计数据
+        """
+        # 计算质量-能量统计
+        total_mass_bh = sum(self.nodes[n]['mass'] for n in self.nodes 
+                          if self.nodes[n]['type'] == 'blackhole')
+        total_mass_earth = sum(self.nodes[n]['mass'] for n in self.nodes 
+                             if self.nodes[n]['type'] == 'earth')
+        total_energy_de = sum(self.nodes[n]['energy'] for n in self.nodes 
+                            if self.nodes[n]['type'] == 'darkenergy')
+        
+        # 计算虫洞通量
+        total_wormhole_flux = sum(wh['flux_capacity'] * wh['stability'] 
+                                for wh in self.wormhole_connections)
+        
+        # 计算时间荷
+        total_time_charge = self.get_total_time_charge()
+        
+        # 记录历史
+        self.history['masses'].append({
+            'blackhole_total': total_mass_bh,
+            'earth_total': total_mass_earth,
+            'darkenergy_total': total_energy_de,
+            'mass_ratio': total_mass_bh / max(total_mass_earth, 1e-6)
+        })
+        
+        self.history['wormhole_fluxes'].append(total_wormhole_flux)
+        self.history['time_charges'].append(total_time_charge.copy())
+
+    def create_3d_visualization_advanced(self):
+        """
+        创建高级3D可视化
+        """
+        # Set font that supports Chinese characters
+        plt.rcParams['font.sans-serif'] = ['SimHei', 'Microsoft YaHei', 'WenQuanYi Zen Hei'] 
+        plt.rcParams['axes.unicode_minus'] = False
+        
+        plt.style.use('dark_background')
+        fig = plt.figure(figsize=(18, 12), facecolor='black')
+        
+        # 主视图
+        ax_main = fig.add_subplot(221, projection='3d', facecolor='black')
+        ax_main.set_title('六维流形时空-虫洞效应可视化', color='white', fontsize=14)
+        
+        # 设置坐标轴
+        for ax in [ax_main]:
+            ax.set_facecolor('black')
+            ax.xaxis.pane.fill = False
+            ax.yaxis.pane.fill = False
+            ax.zaxis.pane.fill = False
+            ax.tick_params(colors='white')
+            ax.set_xlabel('X', color='white')
+            ax.set_ylabel('Y', color='white')
+            ax.set_zlabel('Z', color='white')
+        
+        # 获取位置数据
+        positions = {node_id: node['position'] for node_id, node in self.nodes.items()}
+        
+        # 分离不同类型节点
+        earth_pos = np.array([pos for node_id, pos in positions.items() 
+                            if self.nodes[node_id]['type'] == 'earth'])
+        bh_pos = np.array([pos for node_id, pos in positions.items() 
+                         if self.nodes[node_id]['type'] == 'blackhole'])
+        de_pos = np.array([pos for node_id, pos in positions.items() 
+                         if self.nodes[node_id]['type'] == 'darkenergy'])
+        
+        # 绘制暗能量纤维网络
+        if len(de_pos) > 0:
+            ax_main.scatter(de_pos[:, 0], de_pos[:, 1], de_pos[:, 2],
+                          c='cyan', s=15, alpha=0.3, label=f'暗能量网络 ({len(de_pos)})')
+        
+        # 绘制地球型物质
+        if len(earth_pos) > 0:
+            sample_size = min(3000, len(earth_pos))
+            indices = np.random.choice(len(earth_pos), sample_size, replace=False)
+            earth_sample = earth_pos[indices]
+            
+            # 根据密度着色
+            colors = plt.cm.viridis(np.linspace(0.2, 0.8, sample_size))
+            ax_main.scatter(earth_sample[:, 0], earth_sample[:, 1], earth_sample[:, 2],
+                          c=colors, s=3, alpha=0.7, label=f'地球子时空 ({len(earth_pos)})')
+        
+        # 绘制黑洞
+        if len(bh_pos) > 0:
+            ax_main.scatter(bh_pos[:, 0], bh_pos[:, 1], bh_pos[:, 2],
+                          c='red', s=200, alpha=1.0, label=f'黑洞子时空 ({len(bh_pos)})',
+                          edgecolors='orange', linewidths=2)
+            
+            # 添加光晕效果
+            ax_main.scatter(bh_pos[:, 0], bh_pos[:, 1], bh_pos[:, 2],
+                          c='yellow', s=400, alpha=0.2)
+        
+        # 绘制虫洞连接
+        for wormhole in self.wormhole_connections:
+            earth_node = wormhole['earth_node']
+            de_node = wormhole['de_node']
+            
+            if earth_node in self.nodes and de_node in self.nodes:
+                pos1 = self.nodes[earth_node]['position']
+                pos2 = self.nodes[de_node]['position']
+                
+                # 虫洞连线
+                ax_main.plot([pos1[0], pos2[0]], [pos1[1], pos2[1]], [pos1[2], pos2[2]],
+                           'magenta', alpha=0.8, linewidth=2)
+        
+        # 添加统计信息
+        stats_text = f'时间步: {self.time_step}\n虫洞数: {len(self.wormhole_connections)}\n'
+        if self.history['masses']:
+            latest = self.history['masses'][-1]
+            stats_text += f'总质量比: {latest["mass_ratio"]:.2f}'
+        
+        ax_main.text2D(0.05, 0.95, stats_text, transform=ax_main.transAxes,
+                      bbox=dict(facecolor='black', alpha=0.8, edgecolor='white'),
+                      color='white', fontsize=10, verticalalignment='top')
+        
+        # 设置图例
+        legend = ax_main.legend(loc='upper right', fontsize=10)
+        legend.get_frame().set_alpha(0.8)
+        legend.get_frame().set_facecolor('black')
+        for text in legend.get_texts():
+            text.set_color('white')
+        
+        # 子图：时间荷演化
+        if len(self.history['time_charges']) > 0:
+            ax_charge = fig.add_subplot(222, facecolor='black')
+            ax_charge.set_title('时间荷演化', color='white')
+            
+            charges = np.array(self.history['time_charges'])
+            times = range(len(charges))
+            
+            ax_charge.plot(times, charges[:, 0], 'r-', label='τ₁荷', linewidth=2)
+            ax_charge.plot(times, charges[:, 1], 'g-', label='τ₂荷', linewidth=2)
+            ax_charge.plot(times, charges[:, 2], 'b-', label='τ₃荷', linewidth=2)
+            
+            ax_charge.set_xlabel('时间步', color='white')
+            ax_charge.set_ylabel('时间荷密度', color='white')
+            ax_charge.tick_params(colors='white')
+            ax_charge.legend()
+            ax_charge.grid(True, alpha=0.3)
+        
+        # 子图：虫洞通量
+        if len(self.history['wormhole_fluxes']) > 0:
+            ax_flux = fig.add_subplot(223, facecolor='black')
+            ax_flux.set_title('虫洞通量演化', color='white')
+            
+            fluxes = self.history['wormhole_fluxes']
+            times = range(len(fluxes))
+            
+            ax_flux.plot(times, fluxes, 'magenta', linewidth=2)
+            ax_flux.set_xlabel('时间步', color='white')
+            ax_flux.set_ylabel('总虫洞通量', color='white')
+            ax_flux.tick_params(colors='white')
+            ax_flux.grid(True, alpha=0.3)
+        
+        # 子图：质量分布
+        if len(self.history['masses']) > 0:
+            ax_mass = fig.add_subplot(224, facecolor='black')
+            ax_mass.set_title('质量分布演化', color='white')
+            
+            masses = self.history['masses']
+            times = range(len(masses))
+            
+            bh_masses = [m['blackhole_total'] for m in masses]
+            earth_masses = [m['earth_total'] for m in masses]
+            
+            ax_mass.plot(times, bh_masses, 'r-', label='黑洞总质量', linewidth=2)
+            ax_mass.plot(times, earth_masses, 'g-', label='地球总质量', linewidth=2)
+            
+            ax_mass.set_xlabel('时间步', color='white')
+            ax_mass.set_ylabel('质量', color='white')
+            ax_mass.tick_params(colors='white')
+            ax_mass.legend()
+            ax_mass.grid(True, alpha=0.3)
+        
+        plt.tight_layout()
+        return fig
+
+def evolve_advanced_hypergraph(model, n_iterations=1000):
+    """
+    演化高级超图模型
+    """
+    print(f"开始演化高级六维流形时空模型，共 {n_iterations} 个时间步...")
+    
+    # 初始化CSV记录
+    csv_file = 'advanced_spacetime_evolution.csv'
+    with open(csv_file, 'w', newline='') as f:
+        writer = csv.writer(f)
+        writer.writerow([
+            'iteration', 'earth_nodes', 'blackhole_nodes', 'darkenergy_nodes',
+            'wormhole_count', 'total_time_charge_t1', 'total_time_charge_t2', 'total_time_charge_t3',
+            'total_wormhole_flux', 'earth_total_mass', 'blackhole_total_mass', 'darkenergy_total_energy'
+        ])
+    
+    for iteration in range(n_iterations):
+        model.time_step = iteration
+        
+        # 更新物理量
+        model.update_physics_advanced()
+        
+        # 记录统计
+        model.record_evolution_statistics()
+        
+        # 每50步生成可视化和记录详细数据
+        if iteration % 50 == 0:
+            print(f"时间步 {iteration}: 生成可视化和记录数据")
+            
+            # 统计当前状态
+            earth_count = sum(1 for n in model.nodes if model.nodes[n]['type'] == 'earth')
+            bh_count = sum(1 for n in model.nodes if model.nodes[n]['type'] == 'blackhole')
+            de_count = sum(1 for n in model.nodes if model.nodes[n]['type'] == 'darkenergy')
+            
+            total_time_charge = model.get_total_time_charge()
+            total_wormhole_flux = sum(wh['flux_capacity'] * wh['stability'] 
+                                    for wh in model.wormhole_connections)
+            
+            earth_mass = sum(model.nodes[n]['mass'] for n in model.nodes 
+                           if model.nodes[n]['type'] == 'earth')
+            bh_mass = sum(model.nodes[n]['mass'] for n in model.nodes 
+                        if model.nodes[n]['type'] == 'blackhole')
+            de_energy = sum(model.nodes[n]['energy'] for n in model.nodes 
+                          if model.nodes[n]['type'] == 'darkenergy')
+            
+            # 写入CSV
+            with open(csv_file, 'a', newline='') as f:
+                writer = csv.writer(f)
+                writer.writerow([
+                    iteration, earth_count, bh_count, de_count,
+                    len(model.wormhole_connections),
+                    total_time_charge[0], total_time_charge[1], total_time_charge[2],
+                    total_wormhole_flux, earth_mass, bh_mass, de_energy
+                ])
+            
+            print(f"  地球子时空: {earth_count} 节点")
+            print(f"  黑洞子时空: {bh_count} 节点") 
+            print(f"  暗能量子时空: {de_count} 节点")
+            print(f"  虫洞连接: {len(model.wormhole_connections)} 个")
+            print(f"  虫洞总通量: {total_wormhole_flux:.4f}")
+            
+            # 生成可视化
+            try:
+                fig = model.create_3d_visualization_advanced()
+                os.makedirs('advanced_spacetime_frames/X2', exist_ok=True)
+                plt.savefig(f'advanced_spacetime_frames/X2frame_{iteration:04d}.png', 
+                           dpi=100, bbox_inches='tight')
+                plt.close(fig)
+            except Exception as e:
+                print(f"  可视化生成失败: {e}")
+        
+        # 每100步应用重写规则
+        if iteration % 100 == 0:
+            print(f"  应用Wolfram重写规则...")
+            model.apply_wolfram_rewrite_rules()
+    
+    print("演化完成！")
+    return model
+
+def main():
+    """
+    主程序
+    """
+    print("="*80)
+    print("高级六维流形时空超图计算模拟")
+    print("集成虫洞效应、时间荷守恒和Wolfram重写规则")
+    print("="*80)
+    
+    # 创建模型
+    print("\n1. 初始化高级模型...")
+    model = SixDimensionalSpacetimeHypergraphAdvanced(
+        n_earth=80000,
+        n_blackhole=80,
+        n_darkenergy=2500
+    )
+    
+    # 初始化节点
+    print("\n2. 初始化六维时空节点...")
+    model.initialize_spacetime_nodes()
+    
+    # 创建超边和虫洞
+    print("\n3. 创建超边连接和虫洞...")
+    model.create_hyperedges_and_wormholes()
+    
+    # 运行演化
+    print("\n4. 开始高级演化...")
+    model = evolve_advanced_hypergraph(model, n_iterations=5000)
+    
+    # 最终可视化
+    print("\n5. 生成最终可视化...")
+    final_fig = model.create_3d_visualization_advanced()
+    plt.show()
+    
+    # 输出最终统计
+    print("\n6. 最终统计结果:")
+    print("="*60)
+    
+    earth_count = sum(1 for n in model.nodes if model.nodes[n]['type'] == 'earth')
+    bh_count = sum(1 for n in model.nodes if model.nodes[n]['type'] == 'blackhole')
+    de_count = sum(1 for n in model.nodes if model.nodes[n]['type'] == 'darkenergy')
+    
+    earth_mass = sum(model.nodes[n]['mass'] for n in model.nodes 
+                   if model.nodes[n]['type'] == 'earth')
+    bh_mass = sum(model.nodes[n]['mass'] for n in model.nodes 
+                if model.nodes[n]['type'] == 'blackhole')
+    de_energy = sum(model.nodes[n]['energy'] for n in model.nodes 
+                  if model.nodes[n]['type'] == 'darkenergy')
+    
+    print(f"最终节点统计:")
+    print(f"  地球子时空: {earth_count} 个节点")
+    print(f"  黑洞子时空: {bh_count} 个节点")
+    print(f"  暗能量子时空: {de_count} 个节点")
+    
+    print(f"\n质量-能量分布:")
+    print(f"  地球总质量: {earth_mass:.2e} kg")
+    print(f"  黑洞总质量: {bh_mass:.2e} kg")
+    print(f"  暗能量总能量: {de_energy:.2e} J")
+    print(f"  质量比例 (黑洞/地球): {bh_mass/max(earth_mass, 1e-6):.2f}")
+    
+    print(f"\n虫洞效应统计:")
+    print(f"  活跃虫洞数: {len(model.wormhole_connections)}")
+    total_flux = sum(wh['flux_capacity'] * wh['stability'] for wh in model.wormhole_connections)
+    print(f"  总虫洞通量: {total_flux:.4f}")
+    
+    print(f"\n时间荷守恒:")
+    final_charge = model.get_total_time_charge()
+    print(f"  τ₁总荷: {final_charge[0]:.4f}")
+    print(f"  τ₂总荷: {final_charge[1]:.4f}")
+    print(f"  τ₃总荷: {final_charge[2]:.4f}")
+    
+    print(f"\n网络拓扑:")
+    print(f"  总节点数: {len(model.nodes)}")
+    print(f"  总边数: {len(model.hypergraph.edges())}")
+    print(f"  总超边数: {len(model.hyperedges)}")
+    
+    return model
+
+if __name__ == "__main__":
+    model = main()

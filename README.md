@@ -128,9 +128,9 @@ M₆坐标 ξA=(x,y,z,t₁,t₂,t₃)；
 
 ## 8. 扩展 （`Extended modification`）
 **演化规模**
-本代码围绕100个左右黑洞（5-6个黑洞簇群中心）形成星系团来模拟星系、暗能量纤维网络的结构推演，涉及时空尺度在10亿光年尺，类比史隆长城（Sloan Great Wall）；
+本代码围绕100个左右黑洞（5-6个黑洞簇群中心）形成星系团来模拟星系、暗能量纤维网络的结构推演，涉及时空尺度在0.1-1亿光年，类比史隆长城（Sloan Great Wall）的局部；
 This code simulates the structural derivation of galaxies and dark energy fiber networks by forming galaxy clusters around 100 black holes (5-6 black hole cluster centers), 
-involving a spatial and temporal scale of 1 billion light-years, analogous to the Sloan Great Wall. 
+involving a spatial and temporal scale of 100 million light-years, analogous to the part of Sloan Great Wall. 
 考虑到大规模算力可行性，可扩展到1000-10000亿光年尺度的超大星系团群，涉及500个黑洞簇群中心及巨引力源。同时按照10000万步迭代（1-10亿年），更能反应宇宙的大尺度时空结构及空洞。
 Considering the feasibility of large-scale computational power, it can be scaled up to the mega-galaxy clusters with a scale of 100 billion to 1,000 billion light-years, 
 involving 500 black hole cluster centers and giant gravity sources. At the same time, by iterating in 10,000,000,000 steps (1-1 billion years), the large-scale spatial 

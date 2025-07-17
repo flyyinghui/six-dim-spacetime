@@ -134,6 +134,194 @@ class SixDimensionalSpacetimeHypergraphAdvanced:
         self.history['generator_loss'] = []
         self.history['discriminator_loss'] = []
         
+    def create_3d_visualization_advanced(self):
+        """
+        创建高级3D可视化
+        """
+        # 设置中文字体
+        plt.rcParams['font.sans-serif'] = ['Microsoft YaHei', 'SimHei', 'WenQuanYi Zen Hei']
+        plt.rcParams['axes.unicode_minus'] = False
+        
+        plt.style.use('dark_background')
+        fig = plt.figure(figsize=(20, 14), facecolor='black')
+        
+        # 主视图
+        ax_main = fig.add_subplot(221, projection='3d', facecolor='black')
+        ax_main.set_title('高级六维流形时空-深度学习增强虫洞效应', color='white', fontsize=16)
+        
+        # 设置坐标轴
+        for ax in [ax_main]:
+            ax.set_xlabel('X (kpc)', color='white')
+            ax.set_ylabel('Y (kpc)', color='white')
+            ax.set_zlabel('Z (kpc)', color='white')
+            ax.tick_params(colors='white')
+            ax.xaxis.pane.fill = False
+            ax.yaxis.pane.fill = False
+            ax.zaxis.pane.fill = False
+            ax.xaxis.pane.set_edgecolor('0.8')
+            ax.yaxis.pane.set_edgecolor('0.8')
+            ax.zaxis.pane.set_edgecolor('0.8')
+        
+        # 绘制节点
+        earth_nodes = [n for n, d in self.nodes.items() if d.get('type') == 'earth']
+        bh_nodes = [n for n, d in self.nodes.items() if d.get('type') == 'blackhole']
+        de_nodes = [n for n, d in self.nodes.items() if d.get('type') == 'darkenergy']
+        
+        # 绘制地球节点（蓝色）
+        if earth_nodes:
+            x = [self.nodes[n]['position'][0] for n in earth_nodes]
+            y = [self.nodes[n]['position'][1] for n in earth_nodes]
+            z = [self.nodes[n]['position'][2] for n in earth_nodes]
+            ax_main.scatter(x, y, z, c='blue', s=1, alpha=0.3, label='地球子时空')
+        
+        # 绘制黑洞节点（红色）
+        if bh_nodes:
+            x = [self.nodes[n]['position'][0] for n in bh_nodes]
+            y = [self.nodes[n]['position'][1] for n in bh_nodes]
+            z = [self.nodes[n]['position'][2] for n in bh_nodes]
+            ax_main.scatter(x, y, z, c='red', s=10, alpha=0.7, label='黑洞子时空')
+        
+        # 绘制暗能量节点（绿色）
+        if de_nodes:
+            x = [self.nodes[n]['position'][0] for n in de_nodes]
+            y = [self.nodes[n]['position'][1] for n in de_nodes]
+            z = [self.nodes[n]['position'][2] for n in de_nodes]
+            ax_main.scatter(x, y, z, c='green', s=5, alpha=0.5, label='暗能量子时空')
+        
+        # 绘制虫洞连接
+        for conn in self.wormhole_connections:
+            node1 = conn['nodes'][0]
+            node2 = conn['nodes'][1]
+            if node1 in self.nodes and node2 in self.nodes:
+                x = [self.nodes[node1]['position'][0], self.nodes[node2]['position'][0]]
+                y = [self.nodes[node1]['position'][1], self.nodes[node2]['position'][1]]
+                z = [self.nodes[node1]['position'][2], self.nodes[node2]['position'][2]]
+                ax_main.plot(x, y, z, 'm-', alpha=0.5, linewidth=0.5)
+        
+        # 添加图例
+        legend = ax_main.legend(loc='upper right')
+        legend.get_frame().set_alpha(0.9)
+        legend.get_frame().set_facecolor('black')
+        for text in legend.get_texts():
+            text.set_color('white')
+        
+        # 子图：时间荷演化（增强版）
+        if len(self.history['time_charges']) > 0:
+            ax_charge = fig.add_subplot(222, facecolor='black')
+            ax_charge.set_title('时间荷演化 (深度学习增强)', color='white', fontsize=14)
+            charges = np.array(self.history['time_charges'])
+            times = range(len(charges))
+            ax_charge.plot(times, charges[:, 0], 'r-', label='τ₁荷', linewidth=2.5)
+            ax_charge.plot(times, charges[:, 1], 'g-', label='τ₂荷', linewidth=2.5)
+            ax_charge.plot(times, charges[:, 2], 'b-', label='τ₃荷', linewidth=2.5)
+            ax_charge.set_xlabel('时间步', color='white')
+            ax_charge.set_ylabel('时间荷密度', color='white')
+            ax_charge.tick_params(colors='white')
+            ax_charge.legend()
+            ax_charge.grid(True, color='0.3', alpha=0.3, linestyle='--')
+        
+        # 调整布局
+        plt.tight_layout()
+        
+        return fig
+        
+    def apply_wolfram_rewrite_rules_advanced(self):
+        """
+        应用Wolfram风格的高级重写规则到超图
+        实现几何扩张、拓扑融合、信息扩散和因果传播等规则
+        """
+        print("应用高级Wolfram重写规则...")
+        
+        # 几何扩张规则
+        if 'geometric_expansion' in self.rewrite_rules:
+            scale_factor = self.rewrite_rules['geometric_expansion']
+            for node_id, node_data in self.nodes.items():
+                # 对每个节点的位置进行缩放
+                node_data['position'] = [coord * scale_factor for coord in node_data['position']]
+        
+        # 拓扑融合规则
+        if 'topological_fusion' in self.rewrite_rules and len(self.nodes) > 1:
+            fusion_prob = self.rewrite_rules['topological_fusion']
+            nodes = list(self.nodes.items())
+            
+            for i in range(0, len(nodes)-1, 2):
+                node1_id, node1_data = nodes[i]
+                node2_id, node2_data = nodes[i+1]
+                
+                # 根据概率决定是否融合
+                if random.random() < fusion_prob:
+                    # 创建新节点，合并属性
+                    new_node_id = f"fused_{node1_id}_{node2_id}"
+                    new_position = [(a + b) / 2 for a, b in zip(node1_data['position'], node2_data['position'])]
+                    new_mass = (node1_data.get('mass', 1.0) + node2_data.get('mass', 1.0)) / 2
+                    
+                    # 创建新节点
+                    self.nodes[new_node_id] = {
+                        'type': 'fused',
+                        'position': new_position,
+                        'mass': new_mass,
+                        'energy': (node1_data.get('energy', 0) + node2_data.get('energy', 0)) / 2,
+                        'time_coords': [
+                            (t1 + t2) / 2 
+                            for t1, t2 in zip(node1_data.get('time_coords', [0, 0, 0]), 
+                                            node2_data.get('time_coords', [0, 0, 0]))
+                        ],
+                        'features': (node1_data.get('features', np.zeros(64)) + 
+                                   node2_data.get('features', np.zeros(64))) / 2,
+                        'stability': (node1_data.get('stability', 1.0) + 
+                                    node2_data.get('stability', 1.0)) / 2,
+                    }
+                    
+                    # 删除旧节点
+                    del self.nodes[node1_id]
+                    del self.nodes[node2_id]
+        
+        # 信息扩散规则
+        if 'information_diffusion' in self.rewrite_rules and self.hyperedges:
+            diffusion_rate = self.rewrite_rules['information_diffusion']
+            
+            for edge in self.hyperedges:
+                if 'nodes' in edge and len(edge['nodes']) >= 2:  # 确保有足够的节点可以采样
+                    try:
+                        # 随机选择两个节点交换信息
+                        node1, node2 = random.sample(edge['nodes'], 2)
+                        if node1 in self.nodes and node2 in self.nodes:
+                            # 交换部分特征
+                            features1 = self.nodes[node1].get('features', [])
+                            features2 = self.nodes[node2].get('features', [])
+                            if features1 and features2 and len(features1) == len(features2):
+                                for i in range(min(len(features1), len(features2))):
+                                    if random.random() < diffusion_rate:
+                                        # 交换特征
+                                        features1[i], features2[i] = features2[i], features1[i]
+                    except (ValueError, KeyError) as e:
+                        # 如果采样失败或节点不存在，则跳过
+                        continue
+        
+        # 因果传播规则
+        if 'causal_propagation' in self.rewrite_rules and self.wormhole_connections:
+            causal_strength = self.rewrite_rules['causal_propagation']
+            
+            for wormhole in self.wormhole_connections:
+                if 'nodes' in wormhole and len(wormhole['nodes']) == 2:
+                    node1, node2 = wormhole['nodes']
+                    if node1 in self.nodes and node2 in self.nodes:
+                        # 更新时间坐标，使其更加同步
+                        for i in range(3):  # 对三个时间维度
+                            avg = (self.nodes[node1].get('time_coords', [0,0,0])[i] + 
+                                  self.nodes[node2].get('time_coords', [0,0,0])[i]) / 2
+                            
+                            # 向平均值移动
+                            self.nodes[node1]['time_coords'][i] += (avg - self.nodes[node1].get('time_coords', [0,0,0])[i]) * causal_strength
+                            self.nodes[node2]['time_coords'][i] += (avg - self.nodes[node2].get('time_coords', [0,0,0])[i]) * causal_strength
+                            
+                            # 确保时间坐标在合理范围内
+                            self.nodes[node1]['time_coords'][i] = max(0, min(1, self.nodes[node1]['time_coords'][i]))
+                            self.nodes[node2]['time_coords'][i] = max(0, min(1, self.nodes[node2]['time_coords'][i]))
+        
+        print(f"重写规则应用完成，当前节点数: {len(self.nodes)}")
+        return True
+        
         print(f"高级六维流形时空模型初始化完成")
         print(f"网格分辨率: {self.grid_resolution}³, 盒子大小: {self.box_size} h⁻¹Mpc")
         print(f"地球子时空: {n_earth}, 黑洞子时空: {n_blackhole}, 暗能量子时空: {n_darkenergy}")
@@ -733,8 +921,21 @@ class SixDimensionalSpacetimeHypergraphAdvanced:
             self.history['wormhole_fluxes'].append(np.array(wormhole_fluxes))
         
         # 记录时间荷
-        time_charges = [node.get('time_charge', 0.0) for node in self.nodes.values()]
-        self.history['time_charges'].append(np.array(time_charges))
+        time_charges = []
+        for node in self.nodes.values():
+            tc = node.get('time_charge', 0.0)
+            # 确保time_charge是一个3元素数组
+            if isinstance(tc, (int, float)):
+                tc = [float(tc), 0.0, 0.0]
+            elif isinstance(tc, (list, np.ndarray)) and len(tc) == 3:
+                tc = [float(x) for x in tc]
+            else:
+                tc = [0.0, 0.0, 0.0]
+            time_charges.append(tc)
+        
+        # 转换为numpy数组并确保形状一致
+        time_charges_array = np.array(time_charges, dtype=np.float32)
+        self.history['time_charges'].append(time_charges_array)
     
     def _generate_density_field(self):
         """
@@ -2840,97 +3041,6 @@ def evolve_advanced_hypergraph_ml(model, n_iterations=1000):
     
     print("GAN增强演化完成！")
     return model
-
-    def create_3d_visualization_advanced(self):
-        """
-        创建高级3D可视化
-        """
-        # 设置中文字体
-        plt.rcParams['font.sans-serif'] = ['Microsoft YaHei', 'SimHei', 'WenQuanYi Zen Hei']
-        plt.rcParams['axes.unicode_minus'] = False
-        
-        plt.style.use('dark_background')
-        fig = plt.figure(figsize=(20, 14), facecolor='black')
-        
-        # 主视图
-        ax_main = fig.add_subplot(221, projection='3d', facecolor='black')
-        ax_main.set_title('高级六维流形时空-深度学习增强虫洞效应', color='white', fontsize=16)
-        
-        # 设置坐标轴
-        for ax in [ax_main]:
-            ax.set_xlabel('X (kpc)', color='white')
-            ax.set_ylabel('Y (kpc)', color='white')
-            ax.set_zlabel('Z (kpc)', color='white')
-            ax.tick_params(colors='white')
-            ax.xaxis.pane.fill = False
-            ax.yaxis.pane.fill = False
-            ax.zaxis.pane.fill = False
-            ax.xaxis.pane.set_edgecolor('0.8')
-            ax.yaxis.pane.set_edgecolor('0.8')
-            ax.zaxis.pane.set_edgecolor('0.8')
-        
-        # 绘制节点
-        earth_nodes = [n for n, d in self.nodes.items() if d.get('type') == 'earth']
-        bh_nodes = [n for n, d in self.nodes.items() if d.get('type') == 'blackhole']
-        de_nodes = [n for n, d in self.nodes.items() if d.get('type') == 'darkenergy']
-        
-        # 绘制地球节点（蓝色）
-        if earth_nodes:
-            x = [self.nodes[n]['position'][0] for n in earth_nodes]
-            y = [self.nodes[n]['position'][1] for n in earth_nodes]
-            z = [self.nodes[n]['position'][2] for n in earth_nodes]
-            ax_main.scatter(x, y, z, c='blue', s=1, alpha=0.3, label='地球子时空')
-        
-        # 绘制黑洞节点（红色）
-        if bh_nodes:
-            x = [self.nodes[n]['position'][0] for n in bh_nodes]
-            y = [self.nodes[n]['position'][1] for n in bh_nodes]
-            z = [self.nodes[n]['position'][2] for n in bh_nodes]
-            ax_main.scatter(x, y, z, c='red', s=10, alpha=0.7, label='黑洞子时空')
-        
-        # 绘制暗能量节点（绿色）
-        if de_nodes:
-            x = [self.nodes[n]['position'][0] for n in de_nodes]
-            y = [self.nodes[n]['position'][1] for n in de_nodes]
-            z = [self.nodes[n]['position'][2] for n in de_nodes]
-            ax_main.scatter(x, y, z, c='green', s=5, alpha=0.5, label='暗能量子时空')
-        
-        # 绘制虫洞连接
-        for conn in self.wormhole_connections:
-            node1 = conn['nodes'][0]
-            node2 = conn['nodes'][1]
-            if node1 in self.nodes and node2 in self.nodes:
-                x = [self.nodes[node1]['position'][0], self.nodes[node2]['position'][0]]
-                y = [self.nodes[node1]['position'][1], self.nodes[node2]['position'][1]]
-                z = [self.nodes[node1]['position'][2], self.nodes[node2]['position'][2]]
-                ax_main.plot(x, y, z, 'm-', alpha=0.5, linewidth=0.5)
-        
-        # 添加图例
-        legend = ax_main.legend(loc='upper right')
-        legend.get_frame().set_alpha(0.9)
-        legend.get_frame().set_facecolor('black')
-        for text in legend.get_texts():
-            text.set_color('white')
-        
-        # 子图：时间荷演化（增强版）
-        if len(self.history['time_charges']) > 0:
-            ax_charge = fig.add_subplot(222, facecolor='black')
-            ax_charge.set_title('时间荷演化 (深度学习增强)', color='white', fontsize=14)
-            charges = np.array(self.history['time_charges'])
-            times = range(len(charges))
-            ax_charge.plot(times, charges[:, 0], 'r-', label='τ₁荷', linewidth=2.5)
-            ax_charge.plot(times, charges[:, 1], 'g-', label='τ₂荷', linewidth=2.5)
-            ax_charge.plot(times, charges[:, 2], 'b-', label='τ₃荷', linewidth=2.5)
-            ax_charge.set_xlabel('时间步', color='white')
-            ax_charge.set_ylabel('时间荷密度', color='white')
-            ax_charge.tick_params(colors='white')
-            ax_charge.legend()
-            ax_charge.grid(True, color='0.3', alpha=0.3, linestyle='--')
-        
-        # 调整布局
-        plt.tight_layout()
-        
-        return fig
 
     def visualize_gan_results(self, iteration):
         """

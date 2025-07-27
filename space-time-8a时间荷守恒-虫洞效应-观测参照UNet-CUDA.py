@@ -31,29 +31,19 @@ class SixDimensionalSpacetimeHypergraphAdvanced:
     实现暗能量-地球子时空虫洞效应和高级几何演化
     """
     
-    def __init__(self, n_earth=80000, n_blackhole=80, n_darkenergy=2500):
+    def __init__(self, n_earth=50000, n_blackhole=120, n_darkenergy=8000):
         self.n_earth = n_earth
         self.n_blackhole = n_blackhole
         self.n_darkenergy = n_darkenergy
         
         # 深度学习启发的参数配置
-        self.grid_resolution = 256  # 降低分辨率以减少内存消耗
+        self.grid_resolution = 512  # 基于DarkAI的512³网格
         self.box_size = 1000.0  # h⁻¹Mpc 盒子大小
         self.conv_kernel_size = 4  # 4³卷积核
         self.n_filters_base = 16  # 基础滤波器数量
         self.n_filters_max = 512  # 最大滤波器数量
         self.learning_rate = 2e-4  # 学习率参数
-        self.beta1 = 0.5  # Adam优化器参数
-        self.beta2 = 0.99  # Adam优化器参数
-        self.gp_weight = 10.0  # 梯度惩罚权重
-        self.batch_size = 16  # 减小批量大小以减少内存消耗
-        self.noise_dim = 100  # 噪声维度
-        self.upscale_factor = 8  # 上采样因子
-        self.noise_amp = 0.1  # 噪声幅度
-        self.pretrain_epochs = 5  # 预训练轮数
-        self.adv_epochs = 150  # 对抗训练轮数
-        self.D_steps = 1  # 判别器更新步数
-        self.G_steps = 1  # 生成器更新步数
+        self.batch_size = 15  # 批量大小
         
         # 数据重缩放参数（基于DarkAI）
         self.rescale_a = 0.02  # log变换参数
@@ -112,201 +102,25 @@ class SixDimensionalSpacetimeHypergraphAdvanced:
         self.encoder_features = []
         self.decoder_features = []
         
-        # 初始化GAN模型并移动到设备
-        self.generator = self.build_generator().to(device)
-        self.discriminator = self.build_discriminator().to(device)
-        
-        # 优化器
-        self.optimizer_G = torch.optim.Adam(self.generator.parameters(), 
-                                          lr=self.learning_rate, 
-                                          betas=(self.beta1, self.beta2))
-        self.optimizer_D = torch.optim.Adam(self.discriminator.parameters(),
-                                          lr=self.learning_rate,
-                                          betas=(self.beta1, self.beta2))
-        
-        # 损失函数并移动到设备
-        self.criterion_GAN = torch.nn.MSELoss().to(device)
-        self.criterion_pixel = torch.nn.L1Loss().to(device)
-        
-        # 历史损失记录
-        self.history['generator_loss'] = []
-        self.history['discriminator_loss'] = []
-        
         print(f"高级六维流形时空模型初始化完成")
         print(f"网格分辨率: {self.grid_resolution}³, 盒子大小: {self.box_size} h⁻¹Mpc")
         print(f"地球子时空: {n_earth}, 黑洞子时空: {n_blackhole}, 暗能量子时空: {n_darkenergy}")
 
-    def build_generator(self):
+    def apply_unet_inspired_rescaling(self, density_field, field_type='density'):
         """
-        构建生成器网络 (SRResNet架构)
+        应用基于U-Net启发的数据重缩放
+        参考DarkAI论文中的重缩放方法
         """
-        model = torch.nn.Sequential(
-            # 输入: [batch, channels, H, W, D]
-            torch.nn.Conv3d(1, 64, kernel_size=9, padding=4, padding_mode='replicate'),
-            torch.nn.PReLU(),
-            
-            # 残差块
-            *[self._residual_block(64) for _ in range(5)],
-            
-            # 上采样 (使用ConvTranspose3d)
-            # 2x upsampling
-            torch.nn.ConvTranspose3d(64, 64, kernel_size=4, stride=2, padding=1),
-            torch.nn.PReLU(),
-            
-            # 4x upsampling
-            torch.nn.ConvTranspose3d(64, 64, kernel_size=4, stride=2, padding=1),
-            torch.nn.PReLU(),
-            
-            # 8x upsampling
-            torch.nn.ConvTranspose3d(64, 64, kernel_size=4, stride=2, padding=1),
-            torch.nn.PReLU(),
-            
-            # 最终输出层
-            torch.nn.Conv3d(64, 1, kernel_size=9, padding=4, padding_mode='replicate'),
-            torch.nn.Tanh()
-        )
-        return model.to(device)
-    
-    def build_discriminator(self):
-        """
-        构建判别器网络 (PatchGAN架构)
-        """
-        def discriminator_block(in_filters, out_filters, stride=2, normalization=True):
-            layers = [
-                torch.nn.Conv3d(in_filters, out_filters, 4, stride=stride, padding=1, padding_mode='replicate')
-            ]
-            if normalization:
-                layers.append(torch.nn.InstanceNorm3d(out_filters, affine=True))
-            layers.append(torch.nn.LeakyReLU(0.2, inplace=True))
-            return layers
-        
-        model = torch.nn.Sequential(
-            # 输入: [batch, 1, H, W, D]
-            *discriminator_block(1, 64, normalization=False),
-            *discriminator_block(64, 128),
-            *discriminator_block(128, 256),
-            *discriminator_block(256, 512, stride=1),
-            
-            # 输出1x1x1的判别结果
-            torch.nn.Conv3d(512, 1, kernel_size=4, stride=1, padding=1, padding_mode='replicate'),
-            torch.nn.Sigmoid()
-        )
-        return model.to(device)
-    
-    def _residual_block(self, channels):
-        """构建残差块"""
-        return torch.nn.Sequential(
-            torch.nn.Conv3d(channels, channels, kernel_size=3, padding=1, padding_mode='replicate'),
-            torch.nn.BatchNorm3d(channels),
-            torch.nn.PReLU(),
-            torch.nn.Conv3d(channels, channels, kernel_size=3, padding=1, padding_mode='replicate'),
-            torch.nn.BatchNorm3d(channels)
-        )
-    
-    def apply_unet_inspired_rescaling(self, value, field_type='density'):
-        """
-        应用U-Net启发的重缩放
-        简化版本，直接返回输入值，避免GAN处理
-        """
-        # 直接返回输入值，避免GAN处理
-        return float(value)
-
-    def apply_gan_rescaling(self, density_field, field_type='density'):
-        """
-        应用基于GAN的超分辨率重缩放
-        """
-        # 转换为PyTorch张量并添加批次和通道维度
-        input_tensor = torch.FloatTensor(density_field).unsqueeze(0).unsqueeze(0).to(device)
-        
-        # 生成高分辨率场
-        with torch.no_grad():
-            sr_field = self.generator(input_tensor)
-        
-        # 后处理
         if field_type == 'density':
-            sr_field = torch.log10(1 + sr_field + self.rescale_a)
+            # 对密度场应用log变换
+            rescaled = np.log10(1 + density_field + self.rescale_a)
         elif field_type == 'velocity':
-            sr_field = sr_field / self.rescale_b
-        
-        # 返回numpy数组
-        return sr_field.squeeze().cpu().numpy()
-    
-    def train_gan_step(self, lr_batch, hr_batch):
-        """
-        执行单步GAN训练
-        """
-        # 转换为PyTorch张量
-        lr_batch = torch.FloatTensor(lr_batch).unsqueeze(1).to(device)  # [B, 1, H, W, D]
-        hr_batch = torch.FloatTensor(hr_batch).unsqueeze(1).to(device)  # [B, 1, H, W, D]
-        
-        # 真实和假标签
-        valid = torch.ones((lr_batch.size(0), 1, 1, 1, 1), device=device)
-        fake = torch.zeros((lr_batch.size(0), 1, 1, 1, 1), device=device)
-        
-        # ---------------------
-        #  训练判别器
-        # ---------------------
-        self.optimizer_D.zero_grad()
-        
-        # 真实损失
-        pred_real = self.discriminator(hr_batch)
-        loss_real = self.criterion_GAN(pred_real, valid)
-        
-        # 生成假样本
-        noise = torch.randn(lr_batch.size(0), self.noise_dim, *lr_batch.shape[2:], device=device) * self.noise_amp
-        gen_hr = self.generator(torch.cat([lr_batch, noise], dim=1))
-        
-        # 假损失
-        pred_fake = self.discriminator(gen_hr.detach())
-        loss_fake = self.criterion_GAN(pred_fake, fake)
-        
-        # 梯度惩罚 (WGAN-GP)
-        alpha = torch.rand(lr_batch.size(0), 1, 1, 1, 1, device=device)
-        interpolated = (alpha * hr_batch + (1 - alpha) * gen_hr).requires_grad_(True)
-        pred_interpolated = self.discriminator(interpolated)
-        
-        gradients = torch.autograd.grad(
-            outputs=pred_interpolated,
-            inputs=interpolated,
-            grad_outputs=torch.ones_like(pred_interpolated).to(device),
-            create_graph=True,
-            retain_graph=True
-        )[0]
-        
-        gradients = gradients.view(gradients.size(0), -1)
-        gradient_penalty = ((gradients.norm(2, dim=1) - 1) ** 2).mean() * self.gp_weight
-        
-        # 总判别器损失
-        loss_D = (loss_real + loss_fake) * 0.5 + gradient_penalty
-        loss_D.backward()
-        self.optimizer_D.step()
-        
-        # ---------------------
-        #  训练生成器
-        # ---------------------
-        self.optimizer_G.zero_grad()
-        
-        # 对抗损失
-        pred_fake = self.discriminator(gen_hr)
-        loss_GAN = self.criterion_GAN(pred_fake, valid)
-        
-        # 像素级损失
-        loss_pixel = self.criterion_pixel(gen_hr, hr_batch)
-        
-        # 总生成器损失
-        loss_G = loss_GAN + 100 * loss_pixel  # 平衡对抗损失和像素级损失
-        loss_G.backward()
-        self.optimizer_G.step()
-        
-        return {
-            'G_loss': loss_G.item(),
-            'D_loss': loss_D.item(),
-            'G_loss_GAN': loss_GAN.item(),
-            'G_loss_pixel': loss_pixel.item(),
-            'D_loss_real': loss_real.item(),
-            'D_loss_fake': loss_fake.item(),
-            'gradient_penalty': gradient_penalty.item()
-        }
+            # 对速度场进行线性归一化
+            rescaled = density_field / self.rescale_b
+        else:
+            rescaled = density_field
+            
+        return rescaled
 
     def generate_multi_scale_positions(self, n_objects, object_type, scale_level=0):
         """
@@ -320,35 +134,129 @@ class SixDimensionalSpacetimeHypergraphAdvanced:
         
         # 基于对象类型调整分布参数
         if object_type == 'blackhole':
-            # 黑洞：集中分布，模拟星系团中心
-            n_clusters = np.random.randint(5, 8)
+            # 黑洞：8-10个集群，其中3个大型集群占60%以上黑洞
+            n_clusters = np.random.randint(8, 11)  # 8-10个集群
             cluster_centers = np.random.randn(n_clusters, 3) * effective_box_size * 0.3
             
-            positions = []
-            objects_per_cluster = n_objects // n_clusters
+            # 确保集群之间有一定的最小距离
+            min_dist = effective_box_size * 0.1
+            for i in range(1, n_clusters):
+                while True:
+                    new_center = np.random.randn(3) * effective_box_size * 0.3
+                    distances = [np.linalg.norm(new_center - cluster_centers[j]) for j in range(i)]
+                    if all(d > min_dist for d in distances):
+                        cluster_centers[i] = new_center
+                        break
             
-            for i, center in enumerate(cluster_centers):
-                n_in_cluster = objects_per_cluster + (1 if i < n_objects % n_clusters else 0)
+            positions = []
+            
+            # 分配黑洞到集群，确保3个大型集群占60%以上
+            cluster_weights = np.ones(n_clusters)
+            large_clusters = np.random.choice(n_clusters, 3, replace=False)
+            cluster_weights[large_clusters] = 3.0  # 大型集群权重更高
+            cluster_weights = cluster_weights / cluster_weights.sum()
+            
+            # 确保大型集群至少有总黑洞数的60%
+            min_large_ratio = 0.6
+            large_cluster_ratio = np.random.uniform(min_large_ratio, 0.8)
+            n_large = int(n_objects * large_cluster_ratio)
+            
+            # 分配黑洞数量到集群
+            n_per_cluster = np.zeros(n_clusters, dtype=int)
+            n_per_cluster[large_clusters] = np.random.multinomial(n_large, [1/3, 1/3, 1/3])
+            
+            # 分配剩余的黑洞
+            remaining = n_objects - n_large
+            if remaining > 0:
+                small_clusters = [i for i in range(n_clusters) if i not in large_clusters]
+                if small_clusters:  # 如果有小型集群
+                    small_weights = cluster_weights[small_clusters]
+                    small_weights = small_weights / small_weights.sum()
+                    n_per_cluster[small_clusters] = np.random.multinomial(remaining, small_weights)
+            
+            for i, (center, n_in_cluster) in enumerate(zip(cluster_centers, n_per_cluster)):
+                if n_in_cluster == 0:
+                    continue
+                    
+                # 对于大型集群，使用更紧凑的分布
+                cluster_scale = effective_box_size * (0.01 if i in large_clusters else 0.02)
                 
                 # 使用指数分布模拟深度特征
-                r = np.random.exponential(scale=effective_box_size * 0.02, size=n_in_cluster)
+                r = np.random.exponential(scale=cluster_scale, size=n_in_cluster)
                 theta = np.random.uniform(0, 2*np.pi, n_in_cluster)
                 phi = np.random.uniform(0, np.pi, n_in_cluster)
+                
+                # 添加一些径向分布
+                r = r * (1 + 0.5 * np.random.rand(n_in_cluster))
                 
                 x = r * np.sin(phi) * np.cos(theta)
                 y = r * np.sin(phi) * np.sin(theta)
                 z = r * np.cos(phi)
                 
+                # 添加一些随机扰动
+                if i in large_clusters:
+                    # 大型集群添加一些子结构
+                    sub_centers = center + np.random.randn(3, 3) * cluster_scale * 0.5
+                    for sc in sub_centers:
+                        mask = np.random.rand(n_in_cluster) < 0.3
+                        if np.any(mask):
+                            offset = (sc - center) * np.random.rand(np.sum(mask), 1)
+                            x[mask] += offset[:, 0]
+                            y[mask] += offset[:, 1]
+                            z[mask] += offset[:, 2]
+                
                 cluster_positions = np.column_stack([x, y, z]) + center
                 positions.extend(cluster_positions)
+            
+            # 确保返回正确数量的位置
+            positions = positions[:n_objects]
+            if len(positions) < n_objects:
+                # 如果需要，添加一些随机位置
+                n_needed = n_objects - len(positions)
+                random_pos = np.random.randn(n_needed, 3) * effective_box_size * 0.1
+                positions.extend(random_pos)
                 
         elif object_type == 'darkenergy':
-            # 暗能量：纤维网络分布
+            # 暗能量：纤维网络分布，倾向于连接黑洞集群
             positions = self._generate_filament_network(n_objects, effective_box_size)
             
+            # 调整暗能量分布，使其更集中在黑洞集群之间
+            if hasattr(self, 'blackhole_positions') and len(self.blackhole_positions) > 0:
+                # 计算每个暗能量点到最近黑洞集群的距离
+                from scipy.spatial import cKDTree
+                tree = cKDTree(self.blackhole_positions)
+                distances, _ = tree.query(positions, k=1)
+                
+                # 根据距离调整位置，使其更倾向于分布在黑洞集群之间
+                for i in range(len(positions)):
+                    if distances[i] > effective_box_size * 0.2 and np.random.rand() < 0.3:
+                        # 将部分远离黑洞的暗能量点拉向最近的黑洞
+                        direction = self.blackhole_positions[tree.query(positions[i])[1]] - positions[i]
+                        positions[i] += direction * np.random.uniform(0.1, 0.5)
+            
         elif object_type == 'earth':
-            # 地球型物质：围绕结构分布
+            # 地球型物质：围绕黑洞集群分布
             positions = self._generate_hierarchical_matter_distribution(n_objects, effective_box_size)
+            
+            # 调整地球分布，使其更集中在黑洞集群周围
+            if hasattr(self, 'blackhole_positions') and len(self.blackhole_positions) > 0:
+                for i in range(len(positions)):
+                    # 对于每个地球位置，找到最近的黑洞集群
+                    distances = [np.linalg.norm(positions[i] - bh_pos) for bh_pos in self.blackhole_positions]
+                    min_dist_idx = np.argmin(distances)
+                    min_dist = distances[min_dist_idx]
+                    
+                    if min_dist > effective_box_size * 0.1 and np.random.rand() < 0.5:
+                        # 将部分远离黑洞的地球拉向最近的黑洞
+                        direction = self.blackhole_positions[min_dist_idx] - positions[i]
+                        positions[i] += direction * np.random.uniform(0.1, 0.3)
+        
+        # 确保位置在有效范围内
+        positions = np.clip(positions, -effective_box_size/2, effective_box_size/2)
+        
+        # 如果是黑洞位置，保存供其他分布参考
+        if object_type == 'blackhole' and scale_level == 0:
+            self.blackhole_positions = positions[:n_objects].copy()
             
         return np.array(positions[:n_objects])
 
@@ -894,78 +802,10 @@ class SixDimensionalSpacetimeHypergraphAdvanced:
         
         self.wormhole_connections = active_wormholes
 
-    def prepare_training_data(self):
-        """
-        准备GAN训练数据
-        生成低分辨率和高分辨率数据对用于训练
-        
-        Returns:
-            tuple: (低分辨率张量, 高分辨率张量)
-        """
-        # 1. 收集所有节点的位置和属性
-        positions = np.array([node['position'] for node in self.nodes.values()])
-        
-        # 2. 创建密度场
-        grid_res = self.grid_resolution // self.upscale_factor
-        density_field = np.zeros((grid_res, grid_res, grid_res))
-        
-        # 3. 将节点分布到网格中
-        for pos in positions:
-            # 归一化到[0,1]范围
-            norm_pos = (pos - np.min(positions, axis=0)) / (np.ptp(positions, axis=0) + 1e-6)
-            # 映射到网格索引
-            grid_pos = (norm_pos * (grid_res - 1)).astype(int)
-            try:
-                density_field[grid_pos[0], grid_pos[1], grid_pos[2]] += 1.0
-            except IndexError:
-                continue
-        
-        # 4. 创建低分辨率和高分辨率对
-        lr_field = density_field / (np.max(density_field) + 1e-6)
-        
-        # 5. 生成高分辨率目标（这里可以替换为真实的高分辨率数据）
-        hr_field = np.repeat(np.repeat(np.repeat(lr_field, self.upscale_factor, axis=0), 
-                                      self.upscale_factor, axis=1), 
-                            self.upscale_factor, axis=2)
-        
-        return torch.FloatTensor(lr_field).unsqueeze(0).unsqueeze(0), \
-               torch.FloatTensor(hr_field).unsqueeze(0).unsqueeze(0)
-
-    def pretrain_generator(self, num_epochs=5):
-        """
-        预训练生成器（仅使用像素级损失）
-        
-        Args:
-            num_epochs (int): 预训练轮数
-        """
-        self.generator.train()
-        self.generator.to(device)  # Move generator to device
-        self.criterion_pixel.to(device)  # Move pixel loss to device
-        
-        for epoch in range(num_epochs):
-            # 准备训练数据并移动到设备
-            lr_batch, hr_batch = self.prepare_training_data()
-            lr_batch = lr_batch.to(device)
-            hr_batch = hr_batch.to(device)
-            
-            # 前向传播
-            self.optimizer_G.zero_grad()
-            fake_hr = self.generator(lr_batch)
-            
-            # 计算像素级损失
-            loss_pixel = self.criterion_pixel(fake_hr, hr_batch)
-            
-            # 反向传播和优化
-            loss_pixel.backward()
-            self.optimizer_G.step()
-            
-            if (epoch + 1) % 5 == 0:
-                print(f'预训练生成器 Epoch [{epoch+1}/{num_epochs}], 像素损失: {loss_pixel.item():.4f}')
-
     def update_physics_advanced(self):
         """
         高级物理量更新
-        集成深度学习启发的特征更新和GAN超分辨率
+        集成深度学习启发的特征更新
         """
         # 1. 记录初始时间荷
         initial_tau = self.get_total_time_charge()
@@ -999,10 +839,6 @@ class SixDimensionalSpacetimeHypergraphAdvanced:
         
         # 8. 更新度规和几何
         self._update_spacetime_geometry_advanced()
-        
-        # 9. 训练GAN（每10个时间步）
-        if self.time_step % 10 == 0 and self.time_step > 0:
-            self.train_gan_step()
 
     def _update_gravity_effects_advanced(self):
         """
@@ -1494,37 +1330,33 @@ class SixDimensionalSpacetimeHypergraphAdvanced:
 
 def evolve_advanced_hypergraph_ml(model, n_iterations=1000):
     """
-    演化高级超图模型（GAN增强版）
+    演化高级超图模型（深度学习增强版）
     """
-    print(f"开始演化高级六维流形时空模型（GAN增强），共 {n_iterations} 个时间步...")
+    print(f"开始演化高级六维流形时空模型（深度学习增强），共 {n_iterations} 个时间步...")
     
     # 初始化CSV记录
-    csv_file = 'advanced_spacetime_evolution_gan.csv'
+    csv_file = 'advanced_spacetime_evolution_ml.csv'
     with open(csv_file, 'w', newline='') as f:
         writer = csv.writer(f)
         writer.writerow([
             'iteration', 'earth_nodes', 'blackhole_nodes', 'darkenergy_nodes',
             'wormhole_count', 'total_time_charge_t1', 'total_time_charge_t2', 'total_time_charge_t3',
             'total_wormhole_flux', 'earth_total_mass', 'blackhole_total_mass', 'darkenergy_total_energy',
-            'generator_loss', 'discriminator_loss', 'grid_resolution', 'learning_rate'
+            'unet_features_avg', 'grid_resolution', 'learning_rate'
         ])
-    
-    # 预训练生成器
-    print("预训练生成器...")
-    model.pretrain_generator(num_epochs=model.pretrain_epochs)
     
     for iteration in range(n_iterations):
         model.time_step = iteration
         
-        # 更新物理量（GAN增强版）
+        # 更新物理量（高级版）
         model.update_physics_advanced()
         
-        # 记录统计（GAN增强版）
+        # 记录统计（高级版）
         model.record_evolution_statistics_advanced()
         
         # 每30步生成可视化和记录详细数据
         if iteration % 30 == 0:
-            print(f"时间步 {iteration}: 生成GAN增强可视化和记录数据")
+            print(f"时间步 {iteration}: 生成深度学习增强可视化和记录数据")
             
             # 统计当前状态
             earth_count = sum(1 for n in model.nodes if model.nodes[n]['type'] == 'earth')
@@ -1533,18 +1365,21 @@ def evolve_advanced_hypergraph_ml(model, n_iterations=1000):
             
             total_time_charge = model.get_total_time_charge()
             total_wormhole_flux = sum(wh['flux_capacity'] * wh['stability']
-                                    for wh in model.wormhole_connections)
+                                      for wh in model.wormhole_connections)
             
             earth_mass = sum(model.nodes[n]['mass'] for n in model.nodes
-                           if model.nodes[n]['type'] == 'earth')
+                             if model.nodes[n]['type'] == 'earth')
             bh_mass = sum(model.nodes[n]['mass'] for n in model.nodes
-                        if model.nodes[n]['type'] == 'blackhole')
+                          if model.nodes[n]['type'] == 'blackhole')
             de_energy = sum(model.nodes[n]['energy'] for n in model.nodes
-                          if model.nodes[n]['type'] == 'darkenergy')
+                            if model.nodes[n]['type'] == 'darkenergy')
             
-            # 获取GAN损失
-            gen_loss = model.history['generator_loss'][-1] if model.history['generator_loss'] else 0
-            disc_loss = model.history['discriminator_loss'][-1] if model.history['discriminator_loss'] else 0
+            # 计算深度特征统计
+            unet_feature_stats = []
+            for node_id, node in model.nodes.items():
+                if 'unet_features' in node:
+                    unet_feature_stats.append(np.mean(np.abs(node['unet_features'])))
+            avg_unet_features = np.mean(unet_feature_stats) if unet_feature_stats else 0
             
             # 写入CSV
             with open(csv_file, 'a', newline='') as f:
@@ -1554,83 +1389,33 @@ def evolve_advanced_hypergraph_ml(model, n_iterations=1000):
                     len(model.wormhole_connections),
                     total_time_charge[0], total_time_charge[1], total_time_charge[2],
                     total_wormhole_flux, earth_mass, bh_mass, de_energy,
-                    gen_loss, disc_loss, model.grid_resolution, model.learning_rate
+                    avg_unet_features, model.grid_resolution, model.learning_rate
                 ])
             
             print(f"  地球子时空: {earth_count} 节点")
             print(f"  黑洞子时空: {bh_count} 节点")
             print(f"  暗能量子时空: {de_count} 节点")
             print(f"  虫洞连接: {len(model.wormhole_connections)} 个")
-            print(f"  GAN生成器损失: {gen_loss:.4f}, 判别器损失: {disc_loss:.4f}")
+            print(f"  虫洞总通量: {total_wormhole_flux:.4f}")
+            print(f"  深度特征强度: {avg_unet_features:.4f}")
             
             # 生成高级可视化
             try:
                 fig = model.create_3d_visualization_advanced()
-                os.makedirs('gan_enhanced_spacetime_frames', exist_ok=True)
-                plt.savefig(f'gan_enhanced_spacetime_frames/frame_{iteration:04d}.png',
-                          dpi=120, bbox_inches='tight', facecolor='black')
+                os.makedirs('advanced_spacetime_frames_ml', exist_ok=True)
+                plt.savefig(f'advanced_spacetime_frames_ml/frame_{iteration:04d}.png',
+                            dpi=120, bbox_inches='tight', facecolor='black')
                 plt.close(fig)
-                
-                # 保存GAN生成样本
-                if iteration > 0 and iteration % 100 == 0:
-                    model.visualize_gan_results(iteration)
-                    
             except Exception as e:
                 print(f"  可视化生成失败: {e}")
         
         # 每80步应用重写规则
         if iteration % 80 == 0:
-            print(f"  应用GAN增强Wolfram重写规则...")
+            print(f"  应用深度学习增强Wolfram重写规则...")
             model.apply_wolfram_rewrite_rules_advanced()
     
-    print("GAN增强演化完成！")
+    print("高级深度学习增强演化完成！")
     return model
-
-    def visualize_gan_results(self, iteration):
-        """
-        可视化GAN生成结果
-        
-        Args:
-            iteration (int): 当前迭代次数
-        """
-        try:
-            # 准备测试数据
-            with torch.no_grad():
-                self.generator.eval()
-                lr_test, hr_test = self.prepare_training_data()
-                fake_hr = self.generator(lr_test)
-                
-                # 转换为numpy数组
-                lr_img = lr_test[0, 0].cpu().numpy()
-                hr_img = hr_test[0, 0].cpu().numpy()
-                fake_img = fake_hr[0, 0].cpu().numpy()
-                
-                # 创建可视化
-                fig, axes = plt.subplots(1, 3, figsize=(18, 6))
-                
-                # 低分辨率输入
-                axes[0].imshow(lr_img[:, :, lr_img.shape[2]//2], cmap='viridis')
-                axes[0].set_title('低分辨率输入')
-                axes[0].axis('off')
-                
-                # 生成的高分辨率结果
-                axes[1].imshow(fake_img[:, :, fake_img.shape[2]//2], cmap='viridis')
-                axes[1].set_title('GAN生成结果')
-                axes[1].axis('off')
-                
-                # 真实高分辨率（如果可用）
-                axes[2].imshow(hr_img[:, :, hr_img.shape[2]//2], cmap='viridis')
-                axes[2].set_title('真实高分辨率')
-                axes[2].axis('off')
-                
-                # 保存图像
-                os.makedirs('gan_results', exist_ok=True)
-                plt.savefig(f'gan_results/gan_comparison_{iteration:04d}.png', 
-                          bbox_inches='tight', dpi=150)
-                plt.close(fig)
-                
-        except Exception as e:
-            print(f"GAN结果可视化失败: {e}")
 
 
 def main():
@@ -1646,9 +1431,9 @@ def main():
     # 创建高级模型
     print("\n1. 初始化深度学习增强模型...")
     model = SixDimensionalSpacetimeHypergraphAdvanced(
-        n_earth=80000,   # 地球子时空节点数
-        n_blackhole=80,  # 黑洞子时空节点数
-        n_darkenergy=2500 # 暗能量子时空节点数
+        n_earth=50000,   # 地球子时空节点数
+        n_blackhole=120,  # 黑洞子时空节点数
+        n_darkenergy=8000 # 暗能量子时空节点数
     )
     
     # 初始化高级节点

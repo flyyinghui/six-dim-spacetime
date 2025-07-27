@@ -27,7 +27,7 @@ class SixDimensionalSpacetimeHypergraphAdvanced:
     实现暗能量-地球子时空虫洞效应和高级几何演化
     """
     
-    def __init__(self, n_earth=80000, n_blackhole=80, n_darkenergy=2500):
+    def __init__(self, n_earth=50000, n_blackhole=160, n_darkenergy=4000):
         self.n_earth = n_earth
         self.n_blackhole = n_blackhole
         self.n_darkenergy = n_darkenergy
@@ -918,9 +918,14 @@ class SixDimensionalSpacetimeHypergraphAdvanced:
         """
         创建高级3D可视化
         """
-        # Set font that supports Chinese characters
-        plt.rcParams['font.sans-serif'] = ['SimHei', 'Microsoft YaHei', 'WenQuanYi Zen Hei'] 
+        # Set font that supports Chinese characters and special symbols
+        plt.rcParams['font.sans-serif'] = ['Microsoft YaHei', 'SimHei', 'WenQuanYi Zen Hei'] 
         plt.rcParams['axes.unicode_minus'] = False
+        
+        # Handle missing glyphs gracefully
+        import matplotlib
+        matplotlib.rcParams['text.usetex'] = False  # Disable LaTeX text rendering
+        matplotlib.rcParams['text.latex.preamble'] = r'\usepackage{amsmath}'
         
         plt.style.use('dark_background')
         fig = plt.figure(figsize=(18, 12), facecolor='black')
@@ -1126,9 +1131,15 @@ def evolve_advanced_hypergraph(model, n_iterations=1000):
             # 生成可视化
             try:
                 fig = model.create_3d_visualization_advanced()
-                os.makedirs('advanced_spacetime_frames/X2', exist_ok=True)
-                plt.savefig(f'advanced_spacetime_frames/X2frame_{iteration:04d}.png', 
-                           dpi=100, bbox_inches='tight')
+                os.makedirs('advanced_spacetime_frames/X1', exist_ok=True)
+                try:
+                    plt.savefig(f'advanced_spacetime_frames/X1/frame_{iteration:04d}.png',
+                               dpi=100, bbox_inches='tight')
+                except Exception as e:
+                    print(f"Warning: Could not save frame {iteration}: {str(e)}")
+                    plt.savefig(f'advanced_spacetime_frames/X1/frame_{iteration:04d}.png',
+                               dpi=100, bbox_inches='tight', 
+                               text_kwargs={'usetex': False})
                 plt.close(fig)
             except Exception as e:
                 print(f"  可视化生成失败: {e}")
@@ -1153,9 +1164,9 @@ def main():
     # 创建模型
     print("\n1. 初始化高级模型...")
     model = SixDimensionalSpacetimeHypergraphAdvanced(
-        n_earth=80000,
-        n_blackhole=80,
-        n_darkenergy=2500
+        n_earth=50000,
+        n_blackhole=160,
+        n_darkenergy=4000
     )
     
     # 初始化节点

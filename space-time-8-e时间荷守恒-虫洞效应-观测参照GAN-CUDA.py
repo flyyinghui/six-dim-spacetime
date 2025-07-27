@@ -31,7 +31,7 @@ class SixDimensionalSpacetimeHypergraphAdvanced:
     实现暗能量-地球子时空虫洞效应和高级几何演化
     """
     
-    def __init__(self, n_earth=20000, n_blackhole=80, n_darkenergy=1000):
+    def __init__(self, n_earth=20000, n_blackhole=160, n_darkenergy=4000):
         # 添加预训练相关参数
         self.pretrain_epochs = 50  # 预训练轮数
         self.n_earth = n_earth
@@ -209,16 +209,29 @@ class SixDimensionalSpacetimeHypergraphAdvanced:
         if len(self.history['time_charges']) > 0:
             ax_charge = fig.add_subplot(222, facecolor='black')
             ax_charge.set_title('时间荷演化 (深度学习增强)', color='white', fontsize=14)
-            charges = np.array(self.history['time_charges'])
-            times = range(len(charges))
-            ax_charge.plot(times, charges[:, 0], 'r-', label='τ₁荷', linewidth=2.5)
-            ax_charge.plot(times, charges[:, 1], 'g-', label='τ₂荷', linewidth=2.5)
-            ax_charge.plot(times, charges[:, 2], 'b-', label='τ₃荷', linewidth=2.5)
-            ax_charge.set_xlabel('时间步', color='white')
-            ax_charge.set_ylabel('时间荷密度', color='white')
-            ax_charge.tick_params(colors='white')
-            ax_charge.legend()
-            ax_charge.grid(True, color='0.3', alpha=0.3, linestyle='--')
+            
+            # 计算每个时间步的平均时间荷
+            mean_charges = []
+            for time_step_charges in self.history['time_charges']:
+                if len(time_step_charges) > 0:  # 确保有数据
+                    # 计算每个时间步所有节点的平均时间荷
+                    mean_charge = np.mean(time_step_charges, axis=0)
+                    mean_charges.append(mean_charge)
+            
+            if mean_charges:  # 如果有有效数据
+                mean_charges = np.array(mean_charges)
+                times = range(len(mean_charges))
+                
+                # 确保有足够的时间步来绘制
+                if len(times) > 1:
+                    ax_charge.plot(times, mean_charges[:, 0], 'r-', label='τ₁荷', linewidth=2.5)
+                    ax_charge.plot(times, mean_charges[:, 1], 'g-', label='τ₂荷', linewidth=2.5)
+                    ax_charge.plot(times, mean_charges[:, 2], 'b-', label='τ₃荷', linewidth=2.5)
+                    ax_charge.set_xlabel('时间步', color='white')
+                    ax_charge.set_ylabel('平均时间荷密度', color='white')
+                    ax_charge.tick_params(colors='white')
+                    ax_charge.legend()
+                    ax_charge.grid(True, color='0.3', alpha=0.3, linestyle='--')
         
         # 调整布局
         plt.tight_layout()
@@ -228,77 +241,204 @@ class SixDimensionalSpacetimeHypergraphAdvanced:
     def apply_wolfram_rewrite_rules_advanced(self):
         """
         应用Wolfram风格的高级重写规则到超图
-        实现几何扩张、拓扑融合、信息扩散和因果传播等规则
+        整合了三个版本的功能，包括：
+        1. 几何扩张、拓扑融合、信息扩散、因果传播
+        2. 地球节点三角化、黑洞-暗能量相互作用、虫洞稳定性
+        3. 增强的几何扩张、拓扑融合、量子纠缠扩散
         """
         print("应用高级Wolfram重写规则...")
         
-        # 几何扩张规则
+        # ================== 几何扩张规则 ==================
         if 'geometric_expansion' in self.rewrite_rules:
             scale_factor = self.rewrite_rules['geometric_expansion']
             for node_id, node_data in self.nodes.items():
                 # 对每个节点的位置进行缩放
                 node_data['position'] = [coord * scale_factor for coord in node_data['position']]
         
-        # 拓扑融合规则
+        # ================== 地球节点三角化 ==================
+        earth_nodes = [n for n, d in self.nodes.items() if d.get('type') == 'earth']
+        if earth_nodes and len(earth_nodes) >= 3:
+            # 随机采样地球节点创建三角形
+            sample_size = min(100, len(earth_nodes) // 10)  # 限制采样数量
+            sampled_nodes = random.sample(earth_nodes, min(sample_size, len(earth_nodes)))
+            
+            for i in range(0, len(sampled_nodes)-2, 3):
+                nodes = sampled_nodes[i:i+3]
+                # 创建三角形超边
+                if len(nodes) == 3:
+                    self.hyperedges.append({
+                        'type': 'earth_triangle',
+                        'nodes': nodes,
+                        'created_at': self.time_step
+                    })
+        
+        # ================== 黑洞-暗能量相互作用 ==================
+        blackhole_nodes = [n for n, d in self.nodes.items() if d.get('type') == 'blackhole']
+        darkenergy_nodes = [n for n, d in self.nodes.items() if d.get('type') == 'darkenergy']
+        
+        if blackhole_nodes and darkenergy_nodes:
+            # 随机选择部分黑洞和暗能量节点创建连接
+            for bh in random.sample(blackhole_nodes, min(10, len(blackhole_nodes))):
+                for de in random.sample(darkenergy_nodes, min(5, len(darkenergy_nodes))):
+                    # 创建黑洞-暗能量连接
+                    self.wormhole_connections.append({
+                        'type': 'bh_de_wormhole',
+                        'nodes': [bh, de],
+                        'stability': random.uniform(0.7, 0.95),
+                        'created_at': self.time_step
+                    })
+        
+        # ================== 暗能量膨胀 ==================
+        for node_id in darkenergy_nodes:
+            node = self.nodes[node_id]
+            # 增加暗能量节点的膨胀效应
+            if 'expansion_rate' in node:
+                node['position'] = [p * (1 + node['expansion_rate'] * 0.01) for p in node['position']]
+            
+            # 更新流体速度
+            if 'fluid_velocity' in node:
+                node['fluid_velocity'] = [v * random.uniform(0.95, 1.05) for v in node['fluid_velocity']]
+        
+        # ================== 虫洞稳定性更新 ==================
+        for wormhole in self.wormhole_connections:
+            if 'stability' in wormhole:
+                # 随机波动稳定性
+                wormhole['stability'] = max(0, min(1, wormhole['stability'] + random.uniform(-0.05, 0.05)))
+                
+                # 移除不稳定的虫洞
+                if wormhole['stability'] < 0.3:
+                    self.wormhole_connections.remove(wormhole)
+                    continue
+                    
+                # 更新连接节点的属性
+                if 'nodes' in wormhole and len(wormhole['nodes']) == 2:
+                    node1, node2 = wormhole['nodes']
+                    if node1 in self.nodes and node2 in self.nodes:
+                        # 交换部分量子态信息
+                        if 'quantum_state' in self.nodes[node1] and 'quantum_state' in self.nodes[node2]:
+                            qs1 = self.nodes[node1]['quantum_state']
+                            qs2 = self.nodes[node2]['quantum_state']
+                            if len(qs1) == len(qs2):
+                                # 部分交换量子态
+                                for i in range(len(qs1)):
+                                    if random.random() < 0.1:  # 10%的概率交换
+                                        qs1[i], qs2[i] = qs2[i], qs1[i]
+        
+        # ================== 增强的拓扑融合 ==================
         if 'topological_fusion' in self.rewrite_rules and len(self.nodes) > 1:
             fusion_prob = self.rewrite_rules['topological_fusion']
             nodes = list(self.nodes.items())
             
-            for i in range(0, len(nodes)-1, 2):
-                node1_id, node1_data = nodes[i]
-                node2_id, node2_data = nodes[i+1]
-                
-                # 根据概率决定是否融合
-                if random.random() < fusion_prob:
-                    # 创建新节点，合并属性
-                    new_node_id = f"fused_{node1_id}_{node2_id}"
-                    new_position = [(a + b) / 2 for a, b in zip(node1_data['position'], node2_data['position'])]
-                    new_mass = (node1_data.get('mass', 1.0) + node2_data.get('mass', 1.0)) / 2
+            # 按距离排序的节点对
+            node_pairs = []
+            for i in range(len(nodes)):
+                for j in range(i+1, min(i+10, len(nodes))):  # 限制比较范围
+                    node1_id, node1_data = nodes[i]
+                    node2_id, node2_data = nodes[j]
+                    if node1_id != node2_id:
+                        pos1 = np.array(node1_data['position'])
+                        pos2 = np.array(node2_data['position'])
+                        dist = np.linalg.norm(pos1 - pos2)
+                        node_pairs.append((dist, node1_id, node2_id))
+            
+            # 按距离排序
+            node_pairs.sort()
+            
+            # 处理最近的节点对
+            for dist, node1_id, node2_id in node_pairs[:100]:  # 限制处理数量
+                # 检查节点是否仍然存在
+                if node1_id not in self.nodes or node2_id not in self.nodes:
+                    continue
                     
-                    # 创建新节点
-                    self.nodes[new_node_id] = {
+                if random.random() < fusion_prob * (1 - dist/self.box_size):  # 距离越近，融合概率越高
+                    try:
+                        node1_data = self.nodes[node1_id]
+                        node2_data = self.nodes[node2_id]
+                    except KeyError:
+                        # 如果节点在检查后但在访问前被删除，则跳过
+                        continue
+                    
+                    # 创建新节点，合并属性
+                    new_node_id = f"fused_{node1_id}_{node2_id}_{self.time_step}"
+                    new_position = [(a + b) / 2 for a, b in zip(node1_data['position'], node2_data['position'])]
+                    
+                    # 计算新节点的质量、能量等属性
+                    mass1 = node1_data.get('mass', 1.0)
+                    mass2 = node2_data.get('mass', 1.0)
+                    total_mass = mass1 + mass2
+                    # 添加小常数避免除零错误
+                    safe_total_mass = total_mass if abs(total_mass) > 1e-10 else 1e-10
+                    
+                    # 获取默认特征向量
+                    default_features = np.zeros(64)
+                    
+                    # 计算加权平均值，避免除零
+                    def safe_divide(a, b):
+                        return a / b if abs(b) > 1e-10 else 0.0
+                    
+                    new_node_data = {
                         'type': 'fused',
                         'position': new_position,
-                        'mass': new_mass,
-                        'energy': (node1_data.get('energy', 0) + node2_data.get('energy', 0)) / 2,
+                        'mass': total_mass,
+                        'energy': safe_divide(
+                            node1_data.get('energy', 0) * mass1 + 
+                            node2_data.get('energy', 0) * mass2, 
+                            safe_total_mass
+                        ),
                         'time_coords': [
-                            (t1 + t2) / 2 
+                            safe_divide(t1 * mass1 + t2 * mass2, safe_total_mass)
                             for t1, t2 in zip(node1_data.get('time_coords', [0, 0, 0]), 
                                             node2_data.get('time_coords', [0, 0, 0]))
                         ],
-                        'features': (node1_data.get('features', np.zeros(64)) + 
-                                   node2_data.get('features', np.zeros(64))) / 2,
-                        'stability': (node1_data.get('stability', 1.0) + 
-                                    node2_data.get('stability', 1.0)) / 2,
+                        'features': (
+                            node1_data.get('features', default_features) * mass1 + 
+                            node2_data.get('features', default_features) * mass2
+                        ) / safe_total_mass,
+                        'stability': (
+                            node1_data.get('stability', 1.0) * mass1 + 
+                            node2_data.get('stability', 1.0) * mass2
+                        ) / safe_total_mass,
+                        'created_at': self.time_step
                     }
                     
+                    # 转移连接关系
+                    for edge in self.hyperedges[:]:
+                        if 'nodes' in edge:
+                            if node1_id in edge['nodes'] and node2_id in edge['nodes']:
+                                # 如果两个节点在同一个超边中，移除该超边
+                                self.hyperedges.remove(edge)
+                            elif node1_id in edge['nodes']:
+                                # 将node1的替换为新节点
+                                edge['nodes'] = [new_node_id if n == node1_id else n for n in edge['nodes']]
+                            elif node2_id in edge['nodes']:
+                                # 将node2的替换为新节点
+                                edge['nodes'] = [new_node_id if n == node2_id else n for n in edge['nodes']]
+                    
                     # 删除旧节点
-                    del self.nodes[node1_id]
-                    del self.nodes[node2_id]
+                    if node1_id in self.nodes:
+                        del self.nodes[node1_id]
+                    if node2_id in self.nodes:
+                        del self.nodes[node2_id]
         
-        # 信息扩散规则
-        if 'information_diffusion' in self.rewrite_rules and self.hyperedges:
-            diffusion_rate = self.rewrite_rules['information_diffusion']
+        # ================== 量子纠缠扩散 ==================
+        if 'quantum_entanglement' in self.rewrite_rules and hasattr(self, 'quantum_entanglement_edges'):
+            ent_strength = self.rewrite_rules['quantum_entanglement']
             
-            for edge in self.hyperedges:
-                if 'nodes' in edge and len(edge['nodes']) >= 2:  # 确保有足够的节点可以采样
-                    try:
-                        # 随机选择两个节点交换信息
-                        node1, node2 = random.sample(edge['nodes'], 2)
-                        if node1 in self.nodes and node2 in self.nodes:
-                            # 交换部分特征
-                            features1 = self.nodes[node1].get('features', [])
-                            features2 = self.nodes[node2].get('features', [])
-                            if features1 and features2 and len(features1) == len(features2):
-                                for i in range(min(len(features1), len(features2))):
-                                    if random.random() < diffusion_rate:
-                                        # 交换特征
-                                        features1[i], features2[i] = features2[i], features1[i]
-                    except (ValueError, KeyError) as e:
-                        # 如果采样失败或节点不存在，则跳过
-                        continue
+            for edge in self.quantum_entanglement_edges:
+                if 'nodes' in edge and len(edge['nodes']) == 2:
+                    node1, node2 = edge['nodes']
+                    if node1 in self.nodes and node2 in self.nodes:
+                        # 交换量子态信息
+                        if 'quantum_state' in self.nodes[node1] and 'quantum_state' in self.nodes[node2]:
+                            qs1 = self.nodes[node1]['quantum_state']
+                            qs2 = self.nodes[node2]['quantum_state']
+                            if len(qs1) == len(qs2):
+                                # 部分交换量子态
+                                for i in range(len(qs1)):
+                                    if random.random() < ent_strength:
+                                        qs1[i], qs2[i] = qs2[i], qs1[i]
         
-        # 因果传播规则
+        # ================== 因果传播 ==================
         if 'causal_propagation' in self.rewrite_rules and self.wormhole_connections:
             causal_strength = self.rewrite_rules['causal_propagation']
             
@@ -306,20 +446,56 @@ class SixDimensionalSpacetimeHypergraphAdvanced:
                 if 'nodes' in wormhole and len(wormhole['nodes']) == 2:
                     node1, node2 = wormhole['nodes']
                     if node1 in self.nodes and node2 in self.nodes:
-                        # 更新时间坐标，使其更加同步
+                        # 确保time_coords存在
+                        if 'time_coords' not in self.nodes[node1]:
+                            self.nodes[node1]['time_coords'] = [0.5, 0.5, 0.5]  # 默认中间值
+                        if 'time_coords' not in self.nodes[node2]:
+                            self.nodes[node2]['time_coords'] = [0.5, 0.5, 0.5]  # 默认中间值
+                            
+                        # 确保time_coords存在
+                        if 'time_coords' not in self.nodes[node1]:
+                            self.nodes[node1]['time_coords'] = [0.5, 0.5, 0.5]  # 默认中间值
+                        if 'time_coords' not in self.nodes[node2]:
+                            self.nodes[node2]['time_coords'] = [0.5, 0.5, 0.5]  # 默认中间值
+                            
+                        # 同步时间坐标
                         for i in range(3):  # 对三个时间维度
-                            avg = (self.nodes[node1].get('time_coords', [0,0,0])[i] + 
-                                  self.nodes[node2].get('time_coords', [0,0,0])[i]) / 2
+                            # 再次检查time_coords是否存在，以防在并行处理中被删除
+                            if 'time_coords' not in self.nodes[node1] or 'time_coords' not in self.nodes[node2]:
+                                continue
+                                
+                            avg = (self.nodes[node1]['time_coords'][i] + 
+                                  self.nodes[node2]['time_coords'][i]) / 2
                             
                             # 向平均值移动
-                            self.nodes[node1]['time_coords'][i] += (avg - self.nodes[node1].get('time_coords', [0,0,0])[i]) * causal_strength
-                            self.nodes[node2]['time_coords'][i] += (avg - self.nodes[node2].get('time_coords', [0,0,0])[i]) * causal_strength
+                            self.nodes[node1]['time_coords'][i] += (avg - self.nodes[node1]['time_coords'][i]) * causal_strength
+                            self.nodes[node2]['time_coords'][i] += (avg - self.nodes[node2]['time_coords'][i]) * causal_strength
                             
                             # 确保时间坐标在合理范围内
                             self.nodes[node1]['time_coords'][i] = max(0, min(1, self.nodes[node1]['time_coords'][i]))
                             self.nodes[node2]['time_coords'][i] = max(0, min(1, self.nodes[node2]['time_coords'][i]))
         
-        print(f"重写规则应用完成，当前节点数: {len(self.nodes)}")
+        # ================== 时间荷历史记录 ==================
+        if not hasattr(self, 'time_charge_history'):
+            self.time_charge_history = []
+        
+        # 记录当前时间步的时间荷
+        total_charge = self.get_total_time_charge()
+        self.time_charge_history.append({
+            'step': self.time_step,
+            't1': total_charge[0],
+            't2': total_charge[1],
+            't3': total_charge[2]
+        })
+        
+        # 限制历史记录长度
+        if len(self.time_charge_history) > 1000:
+            self.time_charge_history = self.time_charge_history[-1000:]
+        
+        # 更新时间步
+        self.time_step += 1
+        
+        print(f"高级重写规则应用完成，当前节点数: {len(self.nodes)}, 虫洞连接数: {len(self.wormhole_connections)}")
         return True
         
         print(f"高级六维流形时空模型初始化完成")
@@ -604,11 +780,11 @@ class SixDimensionalSpacetimeHypergraphAdvanced:
         """
         print("生成高级宇宙大尺度结构...")
         
-        # 使用分层方法生成位置
+        # 使用分层方法生成位置，不再生成空洞结构
         positions = {
             'earth': self._generate_hierarchical_matter_distribution(self.n_earth, self.box_size),
             'blackhole': self._generate_filament_network(self.n_blackhole, self.box_size),
-            'darkenergy': self._generate_void_structure(self.n_darkenergy, self.box_size)
+            'darkenergy': self._generate_hierarchical_matter_distribution(self.n_darkenergy // 2, self.box_size)  # 使用分层分布替代空洞结构
         }
         
         return positions
@@ -1058,98 +1234,7 @@ class SixDimensionalSpacetimeHypergraphAdvanced:
         
         print("生成器预训练完成！")
     
-    def _generate_void_structure(self, n_points, box_size):
-        """
-        生成空洞结构，模拟宇宙空洞
-        """
-        print(f"生成空洞结构 ({n_points}个点)...")
-        
-        # 使用泊松圆盘采样生成均匀分布的点
-        points = []
-        cell_size = box_size / (n_points ** (1/3))
-        grid_size = int(np.ceil(box_size / cell_size))
-        
-        # 初始化网格
-        grid = np.full((grid_size, grid_size, grid_size), -1, dtype=int)
-        active = []
-        
-        # 添加第一个随机点
-        first_point = np.random.uniform(0, box_size, 3)
-        points.append(first_point)
-        grid_coord = (first_point / cell_size).astype(int)
-        grid[grid_coord[0], grid_coord[1], grid_coord[2]] = 0
-        active.append(0)
-        
-        # 使用Bridson算法生成泊松圆盘采样
-        while active:
-            # 随机选择一个活跃点
-            idx = np.random.randint(len(active))
-            point_idx = active[idx]
-            point = points[point_idx]
-            found = False
-            
-            # 尝试生成新点
-            for _ in range(30):  # 最多尝试30次
-                # 在环形区域内生成随机点
-                theta = np.random.uniform(0, 2*np.pi)
-                phi = np.arccos(2*np.random.uniform(0, 1) - 1)
-                r = np.random.uniform(cell_size, 2*cell_size)
-                
-                dx = r * np.sin(phi) * np.cos(theta)
-                dy = r * np.sin(phi) * np.sin(theta)
-                dz = r * np.cos(phi)
-                
-                new_point = point + np.array([dx, dy, dz])
-                
-                # 检查是否在边界内
-                if np.any(new_point < 0) or np.any(new_point >= box_size):
-                    continue
-                    
-                # 检查是否与其他点太近
-                grid_coord = (new_point / cell_size).astype(int)
-                min_i = max(0, grid_coord[0]-2)
-                max_i = min(grid_size-1, grid_coord[0]+2)
-                min_j = max(0, grid_coord[1]-2)
-                max_j = min(grid_size-1, grid_coord[1]+2)
-                min_k = max(0, grid_coord[2]-2)
-                max_k = min(grid_size-1, grid_coord[2]+2)
-                
-                too_close = False
-                for i in range(min_i, max_i+1):
-                    for j in range(min_j, max_j+1):
-                        for k in range(min_k, max_k+1):
-                            if grid[i,j,k] != -1:
-                                dist = np.linalg.norm(new_point - points[grid[i,j,k]])
-                                if dist < cell_size:
-                                    too_close = True
-                                    break
-                        if too_close:
-                            break
-                    if too_close:
-                        break
-                
-                if not too_close:
-                    # 添加新点
-                    points.append(new_point)
-                    grid[grid_coord[0], grid_coord[1], grid_coord[2]] = len(points) - 1
-                    active.append(len(points) - 1)
-                    found = True
-                    break
-            
-            # 如果无法生成新点，则移除当前活跃点
-            if not found:
-                active.pop(idx)
-            
-            # 如果达到目标点数，停止
-            if len(points) >= n_points:
-                break
-        
-        # 如果生成的点数不足，添加随机点
-        while len(points) < n_points:
-            points.append(np.random.uniform(0, box_size, 3))
-        
-        return np.array(points[:n_points])
-        
+
     def create_hyperedges_and_wormholes_advanced(self):
         """
         创建高级超边和虫洞连接
@@ -2988,8 +3073,8 @@ def evolve_advanced_hypergraph_ml(model, n_iterations=1000):
             de_count = sum(1 for n in model.nodes if model.nodes[n]['type'] == 'darkenergy')
             
             total_time_charge = model.get_total_time_charge()
-            total_wormhole_flux = sum(wh['flux_capacity'] * wh['stability']
-                                    for wh in model.wormhole_connections)
+            total_wormhole_flux = sum(wh.get('flux', 0.0) * wh.get('stability', 0.0)
+                                    for wh in getattr(model, 'wormholes', []))
             
             earth_mass = sum(model.nodes[n]['mass'] for n in model.nodes
                            if model.nodes[n]['type'] == 'earth')
@@ -3103,8 +3188,8 @@ def main():
     print("\n1. 初始化深度学习增强模型...")
     model = SixDimensionalSpacetimeHypergraphAdvanced(
         n_earth=20000,   # 地球子时空节点数
-        n_blackhole=80,  # 黑洞子时空节点数
-        n_darkenergy=1000 # 暗能量子时空节点数
+        n_blackhole=160,  # 黑洞子时空节点数
+        n_darkenergy=4000 # 暗能量子时空节点数
     )
     
     # 初始化高级节点

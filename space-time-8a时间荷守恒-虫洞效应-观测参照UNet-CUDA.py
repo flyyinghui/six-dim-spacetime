@@ -1,4 +1,5 @@
 import os
+import math
 import torch
 import numpy as np
 import matplotlib.pyplot as plt
@@ -31,25 +32,26 @@ class SixDimensionalSpacetimeHypergraphAdvanced:
     实现暗能量-地球子时空虫洞效应和高级几何演化
     """
     
-    def __init__(self, n_earth=50000, n_blackhole=120, n_darkenergy=8000):
+    def __init__(self, n_earth=50000, n_blackhole=120, n_darkenergy=8000, max_iterations=2000, record_interval=50):
+        # 节点数量
         self.n_earth = n_earth
         self.n_blackhole = n_blackhole
         self.n_darkenergy = n_darkenergy
+        self.n_total = n_earth + n_blackhole + n_darkenergy
+        self.max_iterations = max_iterations
+        self.record_interval = record_interval
+        
+        # 计算记录步数
+        self.max_history_steps = max_iterations // record_interval + 1
+        
+        # 设备配置
+        self.device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
         
         # 深度学习启发的参数配置
         self.grid_resolution = 512  # 基于DarkAI的512³网格
         self.box_size = 1000.0  # h⁻¹Mpc 盒子大小
-        self.conv_kernel_size = 4  # 4³卷积核
-        self.n_filters_base = 16  # 基础滤波器数量
-        self.n_filters_max = 512  # 最大滤波器数量
-        self.learning_rate = 2e-4  # 学习率参数
-        self.batch_size = 15  # 批量大小
         
-        # 数据重缩放参数（基于DarkAI）
-        self.rescale_a = 0.02  # log变换参数
-        self.rescale_b = 3000.0  # 速度归一化参数 km/s
-        
-        # 基础物理参数
+        # 物理参数
         self.kappa_0 = 1.0
         self.alpha_quantum = 1e-36
         self.alpha_sphere = 1e-36
@@ -71,40 +73,330 @@ class SixDimensionalSpacetimeHypergraphAdvanced:
         self.epsilon_2 = 0.1
         self.epsilon_3 = 0.1
         
-        # Wolfram超图重写参数
-        self.rewrite_rules = {
-            'geometric_expansion': 1.02,
-            'topological_fusion': 0.98,
-            'information_diffusion': 0.15,
-            'causal_propagation': 0.25
-        }
+        # 初始化节点数据
+        self._init_nodes()
         
-        # 数据结构初始化
-        self.hypergraph = nx.Graph()
-        self.nodes = {}
-        self.hyperedges = []
-        self.wormhole_connections = []
+        # 初始化历史记录缓冲区
+        self._init_history_buffers()
+        
+        # 使用稀疏矩阵存储虫洞连接以节省内存
+        # 只存储非零元素
+        self.wormhole_connections = {}  # 使用字典存储非零连接
+        self.wormhole_indices = []     # 存储非零连接的索引
+        
+        # 初始化时间步
         self.time_step = 0
-        self.max_iterations = 5000
         
-        # 历史数据存储
-        self.history = {
-            'positions': [],
-            'connections': [],
-            'energies': [],
-            'masses': [],
-            'wormhole_fluxes': [],
-            'time_charges': []
+        # 设置随机种子
+        torch.manual_seed(42)
+        if torch.cuda.is_available():
+            torch.cuda.manual_seed_all(42)
+        
+        print(f"模型初始化完成，使用设备: {self.device}")
+        print(f"总节点数: {self.n_total} (地球: {n_earth}, 黑洞: {n_blackhole}, 暗能量: {n_darkenergy})")
+    
+    def _init_nodes(self):
+        """初始化节点数据"""
+        # 初始化位置 - 使用GPU张量
+        pos_e = (torch.randn(self.n_earth, 3, device=self.device) * self.box_size * 0.4)
+        pos_b = (torch.randn(self.n_blackhole, 3, device=self.device) * self.box_size * 0.3)
+        pos_d = (torch.randn(self.n_darkenergy, 3, device=self.device) * self.box_size * 0.5)
+        
+        # 合并所有位置
+        all_pos = torch.cat([pos_e, pos_b, pos_d], dim=0)
+        
+        # 节点类型 (0: 地球, 1: 黑洞, 2: 暗能量)
+        node_types = torch.cat([
+            torch.zeros(self.n_earth, device=self.device, dtype=torch.int32),
+            torch.ones(self.n_blackhole, device=self.device, dtype=torch.int32),
+            torch.full((self.n_darkenergy,), 2, device=self.device, dtype=torch.int32)
+        ])
+        
+        # 节点质量
+        mass = torch.cat([
+            torch.rand(self.n_earth, device=self.device) * 0.9 + 0.1,  # 地球质量: 0.1-1.0
+            torch.rand(self.n_blackhole, device=self.device) * 150 + 50,  # 黑洞质量: 50-200
+            torch.rand(self.n_darkenergy, device=self.device) * 0.09 + 0.01  # 暗能量: 0.01-0.1
+        ])
+        
+        # 时间荷坐标
+        tau = torch.rand((self.n_total, 3), device=self.device)
+        
+        # 能量
+        energy = torch.zeros(self.n_total, device=self.device)
+        
+        # kappa值 (根据节点类型)
+        kappa = torch.ones(self.n_total, device=self.device) * self.kappa_0
+        kappa = kappa * torch.where(
+            node_types == 0, 1 + self.alpha_quantum,
+            torch.where(node_types == 1, 1 + self.alpha_sphere, 1 + self.alpha_fluid)
+        )
+        
+        # 信息量 (初始为0)
+        info = torch.zeros(self.n_total, device=self.device)
+        
+        # 速度 (初始为0)
+        velocity = torch.zeros_like(all_pos)
+        
+        # 存储节点数据
+        self.nodes = {
+            'pos': all_pos,      # 位置 (n_total, 3)
+            'type': node_types,  # 类型 (n_total,)
+            'mass': mass,        # 质量 (n_total,)
+            'tau': tau,          # 时间荷 (n_total, 3)
+            'energy': energy,    # 能量 (n_total,)
+            'kappa': kappa,      # kappa值 (n_total,)
+            'info': info,        # 信息量 (n_total,)
+            'velocity': velocity # 速度 (n_total, 3)
         }
-        
-        # 深度学习启发的多尺度特征存储
-        self.multi_scale_features = {}
-        self.encoder_features = []
-        self.decoder_features = []
+    
+    def _init_history_buffers(self):
+        """初始化历史记录缓冲区"""
+        # 预分配GPU缓冲区
+        self.history = {
+            'positions': torch.zeros((self.max_history_steps, self.n_total, 3), 
+                                   device=self.device),
+            'energies': torch.zeros((self.max_history_steps, self.n_total), 
+                                  device=self.device),
+            'masses': torch.zeros((self.max_history_steps, 3),  # 按类型统计
+                                device=self.device),
+            'wormhole_flux': torch.zeros(self.max_history_steps, 
+                                       device=self.device),
+            'time_charges': torch.zeros((self.max_history_steps, 3), 
+                                      device=self.device)
+        }
         
         print(f"高级六维流形时空模型初始化完成")
         print(f"网格分辨率: {self.grid_resolution}³, 盒子大小: {self.box_size} h⁻¹Mpc")
-        print(f"地球子时空: {n_earth}, 黑洞子时空: {n_blackhole}, 暗能量子时空: {n_darkenergy}")
+        print(f"地球子时空: {self.n_earth}, 黑洞子时空: {self.n_blackhole}, 暗能量子时空: {self.n_darkenergy}")
+    
+    def _update_physics(self, nodes, dt=0.1):
+        """
+        更新物理状态
+        """
+        with torch.cuda.amp.autocast():
+            # 1. 计算时间荷守恒
+            time_charge = self._compute_time_charge(nodes)
+            
+            # 2. 计算各种力
+            forces = self._compute_forces(nodes)
+            
+            # 3. 更新位置和速度
+            nodes = self._update_positions_velocities(nodes, forces, dt)
+            
+            # 4. 应用虫洞效应
+            nodes = self._apply_wormhole_effects(nodes)
+            
+            # 5. 更新能量
+            nodes = self._update_energy(nodes, forces, dt)
+            
+            # 更新时间步
+            self.time_step += 1
+            
+            return nodes, time_charge
+    
+    def _compute_time_charge(self, nodes):
+        """计算时间荷"""
+        mass = nodes['mass']
+        tau = nodes['tau']
+        return (mass.unsqueeze(-1) * tau).sum(dim=0)
+    
+    def _compute_forces(self, nodes, batch_size=500):
+        """计算所有节点间的力 (更高效的内存使用)"""
+        pos = nodes['pos']
+        mass = nodes['mass']
+        node_types = nodes['type']
+        n_nodes = len(pos)
+        
+        # 初始化力
+        forces = torch.zeros_like(pos)
+        
+        # 引力常数
+        G = 6.67430e-11
+        
+        # 分批处理引力计算
+        for i in range(0, n_nodes, batch_size):
+            end_i = min(i + batch_size, n_nodes)
+            current_batch_size = end_i - i
+            
+            # 计算当前批次的力
+            batch_forces = torch.zeros((current_batch_size, 3), device=pos.device)
+            
+            # 计算当前批次节点到所有其他节点的力
+            for j in range(0, n_nodes, batch_size):
+                end_j = min(j + batch_size, n_nodes)
+                
+                # 计算位置差和距离
+                r_ij = pos[j:end_j].unsqueeze(1) - pos[i:end_i].unsqueeze(0)  # (batch_j, batch_i, 3)
+                dist = torch.norm(r_ij, dim=2, keepdim=True) + 1e-6  # 避免除零
+                
+                # 计算质量乘积
+                mass_ij = mass[j:end_j].unsqueeze(1) * mass[i:end_i].unsqueeze(0)  # (batch_j, batch_i)
+                
+                # 计算引力
+                f_gravity = -G * (mass_ij.unsqueeze(-1) * r_ij / (dist**3 + 1e-10))  # (batch_j, batch_i, 3)
+                
+                # 累加力（排除自相互作用）
+                if i == j:  # 如果是同一批，需要排除对角线
+                    mask = 1 - torch.eye(current_batch_size, device=pos.device).unsqueeze(-1)
+                    f_gravity = f_gravity * mask
+                
+                batch_forces += f_gravity.sum(dim=0)
+            
+            forces[i:end_i] = batch_forces
+        
+        # 计算暗能量斥力 (仅暗能量节点施加)
+        de_mask = (node_types == 2).float()  # 暗能量节点
+        if de_mask.sum() > 0:  # 只在有暗能量节点时计算
+            forces.addcmul_(pos, de_mask.unsqueeze(-1), value=0.1)
+        
+        # 清理内存
+        torch.cuda.empty_cache()
+        
+        return forces
+    
+    def _update_positions_velocities(self, nodes, forces, dt):
+        """更新位置和速度"""
+        nodes = nodes.copy()
+        
+        # 更新速度 (v = v0 + a*dt)
+        acceleration = forces / (nodes['mass'].unsqueeze(-1) + 1e-10)
+        nodes['velocity'] += acceleration * dt
+        
+        # 更新位置 (x = x0 + v*dt)
+        nodes['pos'] += nodes['velocity'] * dt
+        
+        # 应用周期性边界条件
+        nodes['pos'] = nodes['pos'] % self.box_size
+        
+        return nodes
+    
+    def _apply_wormhole_effects(self, nodes):
+        """应用虫洞效应"""
+        # 这里简化处理，实际应根据虫洞连接矩阵计算
+        # 1. 更新虫洞连接
+        self._update_wormhole_connections(nodes)
+        
+        # 2. 应用虫洞传输
+        nodes = self._apply_wormhole_transport(nodes)
+        
+        return nodes
+    
+    def _update_wormhole_connections(self, nodes, batch_size=200):
+        """
+        更新虫洞连接 (稀疏矩阵版本)
+        只存储黑洞节点之间的连接，大大减少内存使用
+        """
+        pos = nodes['pos']
+        node_types = nodes['type']
+        n_nodes = len(pos)
+        
+        # 清空现有连接
+        self.wormhole_connections = {}
+        self.wormhole_indices = []
+        
+        # 获取黑洞节点索引
+        bh_indices = torch.where(node_types == 1)[0].cpu().numpy()
+        n_bh = len(bh_indices)
+        
+        if n_bh == 0:
+            return  # 没有黑洞节点，无需更新
+            
+        # 分批处理黑洞节点对
+        for i in range(n_bh):
+            idx_i = bh_indices[i]
+            pos_i = pos[idx_i]
+            
+            # 计算当前黑洞节点到其他黑洞节点的距离
+            for j in range(i, n_bh):  # 从i开始避免重复计算
+                idx_j = bh_indices[j]
+                if idx_i == idx_j:
+                    continue  # 不自连
+                    
+                # 计算距离
+                dist = torch.norm(pos_i - pos[idx_j]).item()
+                
+                # 计算连接强度
+                strength = math.exp(-dist / (self.box_size * 0.1))
+                
+                if strength > 0.01:  # 只保留足够强的连接
+                    # 存储连接（双向）
+                    key = (min(idx_i, idx_j), max(idx_i, idx_j))
+                    self.wormhole_connections[key] = strength
+                    self.wormhole_indices.append(key)
+        
+        # 清理内存
+        torch.cuda.empty_cache()
+    
+    def _apply_wormhole_transport(self, nodes):
+        """应用虫洞传输效应"""
+        # 这里简化处理，实际应根据虫洞连接矩阵计算
+        # 随机选择一些节点对进行位置交换
+        if self.time_step % 100 == 0:  # 每100步执行一次
+            n_swaps = min(10, self.n_total // 100)  # 交换少量节点
+            if n_swaps > 1:
+                idx1 = torch.randperm(self.n_total)[:n_swaps]
+                idx2 = torch.randperm(self.n_total)[:n_swaps]
+                
+                # 交换位置
+                nodes['pos'][idx1], nodes['pos'][idx2] = \
+                    nodes['pos'][idx2].clone(), nodes['pos'][idx1].clone()
+        
+        return nodes
+    
+    def _update_energy(self, nodes, forces, dt):
+        """更新能量"""
+        nodes = nodes.copy()
+        
+        # 动能: 0.5 * m * v^2
+        kinetic = 0.5 * nodes['mass'] * torch.norm(nodes['velocity'], dim=1)**2
+        
+        # 势能: -G * m1 * m2 / r (简化处理)
+        potential = -torch.norm(forces, dim=1) * nodes['mass'] * 1e-10
+        
+        # 总能量
+        nodes['energy'] = kinetic + potential
+        
+        return nodes
+    
+    def step(self):
+        """执行一个时间步的模拟"""
+        # 更新物理状态
+        self.nodes, time_charge = self._update_physics(self.nodes)
+        
+        # 记录数据
+        if self.time_step % self.record_interval == 0:
+            self._record_step(self.time_step // self.record_interval, time_charge)
+        
+        self.time_step += 1
+    
+    def _record_step(self, step_idx, time_charge):
+        """记录当前步骤的数据"""
+        if step_idx >= self.max_history_steps:
+            return
+            
+        # 记录位置
+        self.history['positions'][step_idx] = self.nodes['pos'].detach()
+        
+        # 记录能量
+        self.history['energies'][step_idx] = self.nodes['energy'].detach()
+        
+        # 记录质量 (按类型统计)
+        for i in range(3):  # 0:地球, 1:黑洞, 2:暗能量
+            mask = (self.nodes['type'] == i)
+            if mask.any():
+                self.history['masses'][step_idx, i] = self.nodes['mass'][mask].mean()
+        
+        # 记录虫洞通量 (简化处理)
+        self.history['wormhole_flux'][step_idx] = self.wormhole_connections.mean()
+        
+        # 记录时间荷
+        self.history['time_charges'][step_idx] = time_charge.detach()
+        
+        if step_idx % 10 == 0:
+            print(f"Step {self.time_step}: "
+                  f"Avg Energy = {self.nodes['energy'].mean().item():.2f}, "
+                  f"Time Charge = {time_charge.tolist()}")
 
     def apply_unet_inspired_rescaling(self, density_field, field_type='density'):
         """
@@ -136,10 +428,10 @@ class SixDimensionalSpacetimeHypergraphAdvanced:
         if object_type == 'blackhole':
             # 黑洞：8-10个集群，其中3个大型集群占60%以上黑洞
             n_clusters = np.random.randint(8, 11)  # 8-10个集群
-            cluster_centers = np.random.randn(n_clusters, 3) * effective_box_size * 0.3
+            cluster_centers = np.random.randn(n_clusters, 3) * effective_box_size * 0.8
             
-            # 确保集群之间有一定的最小距离
-            min_dist = effective_box_size * 0.1
+            # 确保集群之间有一定的最小距离 (扩大5-8倍)
+            min_dist = effective_box_size * np.random.uniform(5, 8)
             for i in range(1, n_clusters):
                 while True:
                     new_center = np.random.randn(3) * effective_box_size * 0.3
@@ -1503,5 +1795,186 @@ def main():
     
     return model
 
+def run_simulation():
+    """运行模拟的主函数"""
+    # 初始化模型
+    model = SixDimensionalSpacetimeHypergraphAdvanced(
+        n_earth=50000,
+        n_blackhole=120,
+        n_darkenergy=8000,
+        max_iterations=2000,  # 减少迭代次数用于测试
+        record_interval=50    # 每10步记录一次
+    )
+    
+    # 创建输出目录
+    os.makedirs('output', exist_ok=True)
+    
+    # 初始化混合精度训练
+    scaler = torch.cuda.amp.GradScaler()
+    
+    # 主模拟循环
+    print("开始模拟...")
+    start_time = time.time()
+    
+    try:
+        with torch.cuda.amp.autocast():
+            for step in range(model.max_iterations):
+                model.step()
+                
+                # 定期保存检查点
+                if step > 0 and step % 100 == 0:
+                    model.save_checkpoint(f'output/checkpoint_step_{step}.pt')
+                    print(f"已保存检查点: step {step}")
+    
+    except KeyboardInterrupt:
+        print("\n模拟被用户中断。")
+    
+    # 计算总运行时间
+    total_time = time.time() - start_time
+    print(f"模拟完成! 总耗时: {total_time:.2f} 秒")
+    
+    # 保存最终结果
+    model.save_results('output/final_results.pt')
+    
+    # 可视化结果
+    model.visualize()
+    
+    return model
+
+# 保存和加载方法
+class ModelIO:
+    @staticmethod
+    def save_checkpoint(model, filename):
+        """保存模型检查点"""
+        checkpoint = {
+            'model_state': model.nodes,
+            'history': model.history,
+            'time_step': model.time_step,
+            'wormhole_connections': model.wormhole_connections,
+            'params': {
+                'n_earth': model.n_earth,
+                'n_blackhole': model.n_blackhole,
+                'n_darkenergy': model.n_darkenergy,
+                'max_iterations': model.max_iterations,
+                'record_interval': model.record_interval,
+                'box_size': model.box_size
+            }
+        }
+        torch.save(checkpoint, filename)
+    
+    @staticmethod
+    def load_checkpoint(filename, device='cuda'):
+        """加载模型检查点"""
+        checkpoint = torch.load(filename, map_location=device)
+        
+        # 创建新模型
+        model = SixDimensionalSpacetimeHypergraphAdvanced(
+            n_earth=checkpoint['params']['n_earth'],
+            n_blackhole=checkpoint['params']['n_blackhole'],
+            n_darkenergy=checkpoint['params']['n_darkenergy'],
+            max_iterations=checkpoint['params']['max_iterations'],
+            record_interval=checkpoint['params']['record_interval']
+        )
+        
+        # 恢复状态
+        model.nodes = checkpoint['model_state']
+        model.history = checkpoint['history']
+        model.time_step = checkpoint['time_step']
+        model.wormhole_connections = checkpoint['wormhole_connections']
+        
+        return model
+
+# 添加保存和加载方法到主类
+SixDimensionalSpacetimeHypergraphAdvanced.save_checkpoint = ModelIO.save_checkpoint.__get__(None, SixDimensionalSpacetimeHypergraphAdvanced)
+SixDimensionalSpacetimeHypergraphAdvanced.load_checkpoint = classmethod(ModelIO.load_checkpoint)
+
+def visualize_simulation(model, save_path='output/simulation_visualization.gif'):
+    """可视化模拟结果"""
+    try:
+        import matplotlib.pyplot as plt
+        from matplotlib.animation import FuncAnimation
+        from mpl_toolkits.mplot3d import Axes3D
+        
+        print("准备可视化...")
+        
+        # 准备数据
+        positions = model.history['positions'].cpu().numpy()
+        node_types = model.nodes['type'].cpu().numpy()
+        
+        # 创建图形
+        fig = plt.figure(figsize=(12, 10))
+        ax = fig.add_subplot(111, projection='3d')
+        
+        # 设置颜色映射
+        colors = ['blue', 'black', 'red']  # 地球、黑洞、暗能量
+        
+        # 初始化散点图
+        scats = []
+        for i in range(3):  # 三种节点类型
+            mask = (node_types == i)
+            if mask.any():
+                scat = ax.scatter([], [], [], c=colors[i], s=1, alpha=0.5, 
+                                label=['地球', '黑洞', '暗能量'][i])
+                scats.append(scat)
+        
+        # 设置图形属性
+        ax.set_xlim(0, model.box_size)
+        ax.set_ylim(0, model.box_size)
+        ax.set_zlim(0, model.box_size)
+        ax.set_xlabel('X')
+        ax.set_ylabel('Y')
+        ax.set_zlabel('Z')
+        ax.set_title('时空超图模拟')
+        ax.legend()
+        
+        # 动画更新函数
+        def update(frame):
+            pos = positions[frame]
+            for i, scat in enumerate(scats):
+                mask = (node_types == i)
+                if mask.any():
+                    scat._offsets3d = (pos[mask, 0], pos[mask, 1], pos[mask, 2])
+            return scats
+        
+        # 创建动画
+        print("创建动画中...")
+        ani = FuncAnimation(fig, update, frames=len(positions), 
+                          interval=100, blit=False)
+        
+        # 保存为GIF
+        print(f"保存动画到 {save_path}...")
+        ani.save(save_path, writer='pillow', fps=10)
+        plt.close()
+        print("可视化完成!")
+        
+    except ImportError as e:
+        print(f"可视化需要matplotlib: {e}")
+
+# 添加可视化方法到主类
+SixDimensionalSpacetimeHypergraphAdvanced.visualize = visualize_simulation
+
+# 添加保存结果方法
+def save_results(self, filename):
+    """保存模拟结果"""
+    results = {
+        'history': {k: v.cpu() for k, v in self.history.items()},
+        'final_state': {k: v.cpu() for k, v in self.nodes.items()},
+        'params': {
+            'n_earth': self.n_earth,
+            'n_blackhole': self.n_blackhole,
+            'n_darkenergy': self.n_darkenergy,
+            'max_iterations': self.max_iterations,
+            'record_interval': self.record_interval,
+            'box_size': self.box_size
+        }
+    }
+    torch.save(results, filename)
+    print(f"结果已保存到 {filename}")
+
+# 将保存结果方法添加到主类
+SixDimensionalSpacetimeHypergraphAdvanced.save_results = save_results
+
 if __name__ == "__main__":
-    model = main()
+    import time
+    # 运行模拟
+    model = run_simulation()

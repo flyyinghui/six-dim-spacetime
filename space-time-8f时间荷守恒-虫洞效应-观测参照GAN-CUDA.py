@@ -1,37 +1,80 @@
 import os
+import csv
 import torch
 import numpy as np
 import matplotlib.pyplot as plt
 from mpl_toolkits.mplot3d import Axes3D
 import networkx as nx
-from matplotlib.animation import FuncAnimation
-import random
-from collections import defaultdict
+from scipy.spatial import Delaunay, distance
+from scipy.spatial.distance import squareform, pdist
+from torch.cuda.amp import autocast, GradScaler
 import math
-from scipy.spatial.distance import pdist, squareform
-from scipy.sparse.csgraph import minimum_spanning_tree
-from scipy.spatial import Delaunay
-from sklearn.cluster import KMeans
-import csv
 
-# 检查CUDA可用性
+# 确保使用CUDA
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 print(f"使用设备: {device}")
+assert torch.cuda.is_available(), "需要CUDA设备来运行此优化版本"
 
 # 设置随机种子
-np.random.seed(42)
-random.seed(42)
-if torch.cuda.is_available():
-    torch.manual_seed(42)
+torch.manual_seed(42)
+torch.backends.cudnn.deterministic = True
+torch.backends.cudnn.benchmark = False
 
 class SixDimensionalSpacetimeHypergraphAdvanced:
     """
     升级版六维流形时空超图计算模型
     集成深度学习启发的宇宙大尺度结构生成
     实现暗能量-地球子时空虫洞效应和高级几何演化
+    优化版本：使用torch.compile和混合精度计算
     """
     
-    def __init__(self, n_earth=20000, n_blackhole=160, n_darkenergy=4000):
+    def _update_physics(self, nodes):
+        """
+        整合所有物理更新的核心函数
+        优化版本，适用于Windows系统
+        """
+        # 使用torch.no_grad()包装整个计算过程
+        with torch.no_grad():
+            # 获取节点属性
+            pos = nodes['position']
+            mass = nodes['mass']
+            vel = nodes['velocity']
+            n = len(pos)
+            
+            # 预分配内存
+            force = torch.zeros_like(pos, device=device)
+            
+            # 分批次计算引力，避免内存溢出
+            batch_size = 1000  # 根据可用GPU内存调整
+            for i in range(0, n, batch_size):
+                end = min(i + batch_size, n)
+                # 计算位置差 [batch_size, n, 3]
+                r_ij = pos[i:end, None] - pos[None, :]  # [batch_size, n, 3]
+                
+                # 计算距离 [batch_size, n]
+                dist = torch.norm(r_ij, dim=2, keepdim=True)  # [batch_size, n, 1]
+                dist = torch.clamp(dist, min=1e-10)
+                
+                # 计算引力 [batch_size, n, 3]
+                force_ij = -self.G * mass[None, :, None] * mass[i:end, None, None] * r_ij / (dist**3 + 1e-10)
+                force_ij = torch.nan_to_num(force_ij, 0.0)
+                
+                # 累加力
+                force[i:end] = force_ij.sum(dim=1)
+            
+            # 更新位置和速度 [n, 3]
+            acc = force / (mass[:, None] + 1e-10)
+            vel = vel + self.dt * acc
+            pos = pos + self.dt * vel
+            
+            # 更新节点属性
+            nodes['position'] = pos
+            nodes['velocity'] = vel
+            nodes['force'] = force
+            
+            return nodes
+    
+    def __init__(self, n_earth=20000, n_blackhole=160, n_darkenergy=4000, max_iters=5000, record_interval=250):
         # 添加预训练相关参数
         self.pretrain_epochs = 50  # 预训练轮数
         self.n_earth = n_earth
@@ -99,14 +142,25 @@ class SixDimensionalSpacetimeHypergraphAdvanced:
         self.time_step = 0
         self.max_iterations = 5000
         
-        # 历史数据存储
+        # 预分配历史张量
+        self.max_iters = max_iters
+        self.record_interval = record_interval
+        steps = max_iters // record_interval + 1
+        
+        # 使用张量存储历史数据
+        self.hist_positions = torch.zeros((steps, n_earth + n_blackhole + n_darkenergy, 3), 
+                                        device=device)
+        self.hist_masses = torch.zeros((steps, 3), device=device)  # BH, Earth, DE
+        self.hist_flux = torch.zeros(steps, device=device)  # 虫洞通量
+        self.hist_tau = torch.zeros((steps, 3), device=device)  # 时间荷
+        
+        # 历史数据索引
+        self.hist_idx = 0
+        
+        # 历史记录初始化
         self.history = {
-            'positions': [],
-            'connections': [],
-            'energies': [],
-            'masses': [],
-            'wormhole_fluxes': [],
-            'time_charges': []
+            'generator_loss': [],
+            'discriminator_loss': []
         }
         
         # 深度学习启发的多尺度特征存储
@@ -130,9 +184,7 @@ class SixDimensionalSpacetimeHypergraphAdvanced:
         self.criterion_GAN = torch.nn.MSELoss().to(device)
         self.criterion_pixel = torch.nn.L1Loss().to(device)
         
-        # 历史损失记录
-        self.history['generator_loss'] = []
-        self.history['discriminator_loss'] = []
+# 历史损失记录已在上方初始化
         
     def create_3d_visualization_advanced(self):
         """

@@ -28,11 +28,15 @@ class SixDimensionalSpacetimeHypergraphAdvanced:
     优化版本：使用torch.compile和混合精度计算
     """
     
-    def _update_physics(self, nodes):
+    def _update_physics(self, nodes, dt=0.01):
         """
         整合所有物理更新的核心函数
         优化版本，适用于Windows系统
+        包含时间荷守恒和虫洞效应
         """
+        # 更新时间步长
+        self.dt = dt
+        
         # 使用torch.no_grad()包装整个计算过程
         with torch.no_grad():
             # 获取节点属性
@@ -71,6 +75,20 @@ class SixDimensionalSpacetimeHypergraphAdvanced:
             nodes['position'] = pos
             nodes['velocity'] = vel
             nodes['force'] = force
+            
+            # 更新时间荷守恒
+            nodes = self.enforce_time_charge_conservation(nodes)
+            
+            # 更新虫洞连接
+            if hasattr(self, '_update_wormholes'):
+                self._update_wormholes(dt)
+            
+            # 记录时间荷
+            if hasattr(self, 'hist_tau') and hasattr(self, 'hist_idx') and hasattr(self, 'record_interval'):
+                if self.time_step % self.record_interval == 0 and self.hist_idx < len(self.hist_tau):
+                    Q = self.compute_time_charge_density(nodes)
+                    self.hist_tau[self.hist_idx] = Q.sum(dim=0)
+                    self.hist_idx += 1
             
             return nodes
     
@@ -638,7 +656,9 @@ class SixDimensionalSpacetimeHypergraphAdvanced:
         blackholes_per_minor = minor_blackhole_count // n_minor_clusters if n_minor_clusters > 0 else 0
         
         # 生成集群中心位置，确保它们之间有足够的距离
-        min_cluster_dist = self.box_size / (n_clusters ** (1/3)) * 0.8  # 确保集群之间有足够距离
+        # 增加集群间最小距离为原来的5-10倍
+        distance_scale = np.random.uniform(5.0, 10.0)  # 随机选择5-10倍的缩放因子
+        min_cluster_dist = self.box_size / (n_clusters ** (1/3)) * 0.8 * distance_scale  # 增加集群间最小距离
         cluster_centers = []
         
         # 生成主要集群中心
@@ -664,8 +684,9 @@ class SixDimensionalSpacetimeHypergraphAdvanced:
         # 主要集群（大质量）
         for i in range(n_major_clusters):
             cluster_center = cluster_centers[i]
-            # 主要集群有更大的影响范围
-            cluster_radius = min_cluster_dist * 0.6
+            # 主要集群有更大的影响范围，但保持相对大小不变
+            # 由于集群间距离增加了，保持集群半径与最小距离的比例
+            cluster_radius = min_cluster_dist * 0.12  # 0.6 / 5 = 0.12 (因为最小距离增加了5-10倍)
             
             # 计算这个集群应该有的黑洞数量
             n_in_cluster = blackholes_per_major
@@ -700,8 +721,8 @@ class SixDimensionalSpacetimeHypergraphAdvanced:
         # 次要集群（小质量）
         for i in range(n_major_clusters, n_clusters):
             cluster_center = cluster_centers[i]
-            # 次要集群有更小的影响范围
-            cluster_radius = min_cluster_dist * 0.4
+            # 次要集群有较小的影响范围，保持相对大小不变
+            cluster_radius = min_cluster_dist * 0.06  # 0.3 / 5 = 0.06 (因为最小距离增加了5-10倍)
             
             # 计算这个集群应该有的黑洞数量
             n_in_cluster = blackholes_per_minor
@@ -965,30 +986,109 @@ class SixDimensionalSpacetimeHypergraphAdvanced:
         
         return lr_batch, hr_batch
     
-    def update_physics_advanced(self, dt=0.1):
+    def compute_time_charge_density(self, nodes):
         """
-        高级物理更新方法
-        更新所有节点的物理状态，包括位置、速度、能量等
+        计算每个节点的三维时间荷密度 Q_T^μ，
+        返回形状 (n_nodes, 3) 的 tensor，
+        分量对应 (Q_t1, Q_t2, Q_t3)。
+        """
+        # 初始化时间荷密度张量
+        n_nodes = len(nodes)
+        Q = torch.zeros((n_nodes, 3), device=device)
         
-        参数:
-            dt (float): 时间步长
-        """
-        if not hasattr(self, 'nodes') or not self.nodes:
-            return
+        # 将节点数据转换为张量
+        node_ids = list(nodes.keys())
+        node_types = torch.tensor([nodes[nid].get('type', 0) for nid in node_ids], device=device)
+        masses = torch.tensor([nodes[nid].get('mass', 1.0) for nid in node_ids], device=device).unsqueeze(-1)  # (N,1)
+        
+        # 获取时间坐标，如果不存在则初始化为0.5
+        time_coords = []
+        for nid in node_ids:
+            tc = nodes[nid].get('time_coords', [0.5, 0.5, 0.5])
+            if not isinstance(tc, (list, tuple)) or len(tc) != 3:
+                tc = [0.5, 0.5, 0.5]
+            time_coords.append(tc)
+        time_coords = torch.tensor(time_coords, device=device)  # (N,3)
+        
+        # 根据节点类型计算时间荷密度
+        # 地球节点 (type 0): 只保留 t1 维度
+        earth_mask = (node_types == 0)
+        if earth_mask.any():
+            Q[earth_mask, 0] = masses[earth_mask, 0] * time_coords[earth_mask, 0]
+        
+        # 黑洞节点 (type 1): 所有三个维度
+        blackhole_mask = (node_types == 1)
+        if blackhole_mask.any():
+            Q[blackhole_mask] = masses[blackhole_mask] * time_coords[blackhole_mask]
+        
+        # 暗能量节点 (type 2): 只保留 t2 和 t3 维度
+        darkenergy_mask = (node_types == 2)
+        if darkenergy_mask.any():
+            Q[darkenergy_mask, 1:] = masses[darkenergy_mask] * time_coords[darkenergy_mask, 1:]
             
-        # 初始化物理参数
-        G = 6.67430e-11  # 万有引力常数
-        c = 2.99792458e8  # 光速
+        return Q
         
-        # 获取所有节点ID和位置
-        node_ids = list(self.nodes.keys())
-        positions = np.array([self.nodes[node_id]['position'] for node_id in node_ids])
-        
-        # 计算节点间距离矩阵
-        dist_matrix = squareform(pdist(positions))
-        
-        # 避免除零错误
-        np.fill_diagonal(dist_matrix, np.inf)
+    def enforce_time_charge_conservation(self, nodes):
+        """
+        对所有节点的时间荷进行全局校正，使
+        sum_i ∂_μ Q_ti^μ = 0 成立。
+        """
+        with torch.no_grad():
+            # 计算当前时间荷密度
+            Q = self.compute_time_charge_density(nodes)  # (N,3)
+            total_Q = Q.sum(dim=0)  # (3,)
+            
+            # 获取节点类型掩码
+            node_ids = list(nodes.keys())
+            node_types = torch.tensor([nodes[nid].get('type', 0) for nid in node_ids], device=device)
+            
+            # 计算每类节点的总质量（用于归一化）
+            masses = torch.tensor([nodes[nid].get('mass', 1.0) for nid in node_ids], device=device)  # (N,)
+            
+            # 计算每类节点的总质量
+            mask_earth = (node_types == 0)      # 地球节点
+            mask_blackhole = (node_types == 1)   # 黑洞节点
+            mask_darkenergy = (node_types == 2)  # 暗能量节点
+            
+            total_mass_earth = masses[mask_earth].sum() if mask_earth.any() else 1.0
+            total_mass_blackhole = masses[mask_blackhole].sum() if mask_blackhole.any() else 1.0
+            total_mass_darkenergy = masses[mask_darkenergy].sum() if mask_darkenergy.any() else 1.0
+            
+            # 计算每类节点的修正量
+            correction = torch.zeros(3, device=device)
+            if mask_earth.any():
+                correction[0] = -total_Q[0] / (total_mass_earth + 1e-10)
+            if mask_blackhole.any():
+                correction = -total_Q / (total_mass_blackhole + 1e-10)
+            if mask_darkenergy.any():
+                correction[1:] = -total_Q[1:] / (total_mass_darkenergy + 1e-10)
+            
+            # 应用修正到时间坐标
+            for i, nid in enumerate(node_ids):
+                node = nodes[nid]
+                node_type = node.get('type', 0)
+                tc = node.get('time_coords', [0.5, 0.5, 0.5])
+                if not isinstance(tc, (list, tuple)) or len(tc) != 3:
+                    tc = [0.5, 0.5, 0.5]
+                
+                # 转换为tensor进行修正
+                tc_tensor = torch.tensor(tc, device=device)
+                
+                # 根据节点类型应用修正
+                if node_type == 0:  # 地球节点
+                    tc_tensor[0] += correction[0]
+                elif node_type == 1:  # 黑洞节点
+                    tc_tensor += correction
+                elif node_type == 2:  # 暗能量节点
+                    tc_tensor[1:] += correction[1:]
+                
+                # 确保时间坐标在[0,1]范围内
+                tc_tensor = torch.clamp(tc_tensor, 0.0, 1.0)
+                
+                # 更新节点时间坐标
+                nodes[nid]['time_coords'] = tc_tensor.cpu().numpy().tolist()
+            
+            return nodes
         inv_dist_matrix = 1.0 / (dist_matrix + 1e-8)
         inv_dist_cubed = inv_dist_matrix ** 3
         

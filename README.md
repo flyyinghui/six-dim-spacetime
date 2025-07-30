@@ -65,6 +65,15 @@ M₆坐标 ξA=(x,y,z,t₁,t₂,t₃)；
 - 纠缠强度λ₍ent₎：dρ_ent/dt across t₂,t₃
 - 控制势Λ₍control₎：V_control 对地球粒子类型的重写.
 
+## 4. 时间荷守恒（`3D time-charge conservation`）
+1. **compute_time_charge_density**: block invalid time dimensions
+   based on node type, and combine mass and τ to complete Q_T^μ calculation. 
+3. **enforce_time_charge_conservation**: allocate corrections for global
+   time-charge deviation to ensure that ∑_nodes Q_T^μ = 0.
+5. in the main loop, the correction function is called immediately after the
+   physical update so that the numerical simulation strictly satisfies the
+   3D time-charge conservation.
+
 ## 4. 物理量更新（`update_physics`）
 **计算模型**
 - 遍历超边，分别更新：

@@ -175,8 +175,9 @@ class SixDimensionalSpacetimeHypergraphAdvanced:
         更新物理状态
         """
         with torch.cuda.amp.autocast():
-            # 1. 计算时间荷守恒
-            time_charge = self._compute_time_charge(nodes)
+            # 1. 计算时间荷密度
+            time_charge_density = self.compute_time_charge_density(nodes)
+            time_charge = time_charge_density.sum(dim=0)
             
             # 2. 计算各种力
             forces = self._compute_forces(nodes)
@@ -190,6 +191,9 @@ class SixDimensionalSpacetimeHypergraphAdvanced:
             # 5. 更新能量
             nodes = self._update_energy(nodes, forces, dt)
             
+            # 6. 强制时间荷守恒
+            nodes = self.enforce_time_charge_conservation(nodes)
+            
             # 更新时间步
             self.time_step += 1
             
@@ -197,9 +201,87 @@ class SixDimensionalSpacetimeHypergraphAdvanced:
     
     def _compute_time_charge(self, nodes):
         """计算时间荷"""
-        mass = nodes['mass']
-        tau = nodes['tau']
-        return (mass.unsqueeze(-1) * tau).sum(dim=0)
+        return self.compute_time_charge_density(nodes).sum(dim=0)
+        
+    def compute_time_charge_density(self, nodes):
+        """
+        计算每个节点的三维时间荷密度 Q_T^μ，
+        返回形状 (n_nodes, 3) 的 tensor，
+        分量对应 (Q_t1, Q_t2, Q_t3)。
+        """
+        mass = nodes['mass'].unsqueeze(-1)            # (N,1)
+        tau = nodes['tau']                            # (N,3)
+        node_type = nodes['type']                     # (N,)
+        
+        # 初始化时间荷密度
+        Q = torch.zeros_like(tau)  # (N,3)
+        
+        # 地球节点 (type 0): 只保留 t1 维度
+        if (node_type == 0).any():
+            earth_mask = (node_type == 0)
+            Q[earth_mask, 0] = mass[earth_mask, 0] * tau[earth_mask, 0]
+        
+        # 黑洞节点 (type 1): 保留所有维度
+        if (node_type == 1).any():
+            blackhole_mask = (node_type == 1)
+            Q[blackhole_mask] = mass[blackhole_mask] * tau[blackhole_mask]
+        
+        # 暗能量节点 (type 2): 保留 t2 和 t3 维度
+        if (node_type == 2).any():
+            darkenergy_mask = (node_type == 2)
+            Q[darkenergy_mask, 1:] = mass[darkenergy_mask] * tau[darkenergy_mask, 1:]
+
+        return Q  # (N,3)
+        
+    def enforce_time_charge_conservation(self, nodes):
+        """
+        对所有节点的时间荷进行全局校正，使
+        sum_i ∂_μ Q_ti^μ = 0 成立。
+        """
+        with torch.no_grad():
+            Q = self.compute_time_charge_density(nodes)  # (N,3)
+            total_Q = Q.sum(dim=0)                      # (3,)
+            
+            # 获取节点类型掩码
+            node_type = nodes['type']
+            mask_earth = (node_type == 0)               # 地球节点
+            mask_blackhole = (node_type == 1)            # 黑洞节点
+            mask_darkenergy = (node_type == 2)           # 暗能量节点
+            
+            # 计算每个类型节点的质量总和（用于归一化）
+            mass = nodes['mass']
+            total_mass_earth = mass[mask_earth].sum()
+            total_mass_blackhole = mass[mask_blackhole].sum()
+            total_mass_darkenergy = mass[mask_darkenergy].sum()
+            
+            # 计算每个时间维度的修正量
+            correction = torch.zeros(3, device=self.device)
+            
+            # 对每个时间维度应用修正
+            for i in range(3):
+                if i == 0:  # t1 维度：地球和黑洞贡献
+                    if total_mass_earth + total_mass_blackhole > 0:
+                        correction[i] = -total_Q[i] / (total_mass_earth + total_mass_blackhole + 1e-10)
+                else:  # t2, t3 维度：黑洞和暗能量贡献
+                    if total_mass_blackhole + total_mass_darkenergy > 0:
+                        correction[i] = -total_Q[i] / (total_mass_blackhole + total_mass_darkenergy + 1e-10)
+            
+            # 应用修正到时间坐标
+            nodes['tau'] = nodes['tau'].clone()  # 确保不修改原始张量
+            
+            # 地球节点只修正 t1 维度
+            if mask_earth.any():
+                nodes['tau'][mask_earth, 0] += correction[0]
+                
+            # 黑洞节点修正所有维度
+            if mask_blackhole.any():
+                nodes['tau'][mask_blackhole] += correction.unsqueeze(0)
+                
+            # 暗能量节点只修正 t2, t3 维度
+            if mask_darkenergy.any():
+                nodes['tau'][mask_darkenergy, 1:] += correction[1:].unsqueeze(0)
+            
+            return nodes
     
     def _compute_forces(self, nodes, batch_size=500):
         """计算所有节点间的力 (更高效的内存使用)"""
@@ -1620,11 +1702,197 @@ class SixDimensionalSpacetimeHypergraphAdvanced:
         return fig
 
 
+def plot_evolution_metrics(history, save_path=None):
+    """绘制演化指标随时间的变化"""
+    plt.figure(figsize=(15, 10))
+    
+    # 节点数量变化
+    plt.subplot(2, 2, 1)
+    plt.plot(history['iterations'], history['earth_nodes'], 'g-', label='地球节点')
+    plt.plot(history['iterations'], history['blackhole_nodes'], 'r-', label='黑洞节点')
+    plt.plot(history['iterations'], history['darkenergy_nodes'], 'b-', label='暗能量节点')
+    plt.xlabel('迭代步数')
+    plt.ylabel('节点数量')
+    plt.title('节点数量变化')
+    plt.legend()
+    plt.grid(True, alpha=0.3)
+    
+    # 质量-能量分布
+    plt.subplot(2, 2, 2)
+    plt.plot(history['iterations'], history['earth_mass'], 'g-', label='地球总质量')
+    plt.plot(history['iterations'], history['blackhole_mass'], 'r-', label='黑洞总质量')
+    plt.plot(history['iterations'], history['darkenergy_energy'], 'b-', label='暗能量')
+    plt.xlabel('迭代步数')
+    plt.ylabel('质量/能量')
+    plt.title('质量-能量分布变化')
+    plt.legend()
+    plt.grid(True, alpha=0.3)
+    
+    # 时间荷变化
+    plt.subplot(2, 2, 3)
+    plt.plot(history['iterations'], history['time_charge_t1'], 'r-', label='τ₁')
+    plt.plot(history['iterations'], history['time_charge_t2'], 'g-', label='τ₂')
+    plt.plot(history['iterations'], history['time_charge_t3'], 'b-', label='τ₃')
+    plt.xlabel('迭代步数')
+    plt.ylabel('时间荷')
+    plt.title('时间荷变化')
+    plt.legend()
+    plt.grid(True, alpha=0.3)
+    
+    # 虫洞统计
+    plt.subplot(2, 2, 4)
+    plt.plot(history['iterations'], history['wormhole_count'], 'k-', label='虫洞数量')
+    plt.plot(history['iterations'], history['wormhole_flux'], 'm-', label='虫洞通量')
+    plt.xlabel('迭代步数')
+    plt.ylabel('数量/通量')
+    plt.title('虫洞统计')
+    plt.legend()
+    plt.grid(True, alpha=0.3)
+    
+    plt.tight_layout()
+    
+    if save_path:
+        os.makedirs(os.path.dirname(save_path), exist_ok=True)
+        plt.savefig(save_path, dpi=150, bbox_inches='tight')
+        plt.close()
+    else:
+        plt.show()
+
+def visualize_iteration_state(model, iteration, output_dir='iteration_visualizations'):
+    """
+    可视化当前迭代的状态，包括3D视图和时间荷信息
+    """
+    try:
+        # 创建输出目录
+        os.makedirs(output_dir, exist_ok=True)
+        
+        # 创建图形
+        fig = plt.figure(figsize=(18, 10))
+        
+        # 1. 3D 视图
+        ax1 = fig.add_subplot(231, projection='3d')
+        
+        # 收集节点数据
+        earth_pos = []
+        bh_pos = []
+        de_pos = []
+        
+        for node_id, node in model.nodes.items():
+            pos = node['position']
+            if node['type'] == 'earth':
+                earth_pos.append(pos)
+            elif node['type'] == 'blackhole':
+                bh_pos.append(pos)
+            else:  # darkenergy
+                de_pos.append(pos)
+        
+        # 绘制节点
+        if earth_pos:
+            earth_pos = np.array(earth_pos)
+            ax1.scatter(earth_pos[:,0], earth_pos[:,1], earth_pos[:,2], 
+                       c='blue', s=1, alpha=0.5, label='Earth Nodes')
+        
+        if bh_pos:
+            bh_pos = np.array(bh_pos)
+            ax1.scatter(bh_pos[:,0], bh_pos[:,1], bh_pos[:,2], 
+                       c='red', s=10, alpha=0.8, label='Black Holes')
+        
+        if de_pos:
+            de_pos = np.array(de_pos)
+            ax1.scatter(de_pos[:,0], de_pos[:,1], de_pos[:,2], 
+                       c='purple', s=2, alpha=0.3, label='Dark Energy')
+        
+        ax1.set_title(f'3D View (Iteration {iteration})')
+        ax1.legend()
+        
+        # 2. 时间荷信息
+        ax2 = fig.add_subplot(232)
+        time_charge = model.get_total_time_charge()
+        ax2.bar(['T1', 'T2', 'T3'], time_charge, color=['red', 'green', 'blue'])
+        ax2.set_title('Total Time Charge')
+        ax2.set_ylabel('Charge Value')
+        
+        # 3. 节点统计
+        ax3 = fig.add_subplot(233)
+        node_types = [model.nodes[n]['type'] for n in model.nodes]
+        type_counts = {
+            'Earth': node_types.count('earth'),
+            'Black Holes': node_types.count('blackhole'),
+            'Dark Energy': node_types.count('darkenergy')
+        }
+        ax3.pie(type_counts.values(), labels=type_counts.keys(), 
+               autopct='%1.1f%%', colors=['blue', 'red', 'purple'])
+        ax3.set_title('Node Distribution')
+        
+        # 4. 虫洞信息
+        ax4 = fig.add_subplot(234)
+        wormhole_fluxes = [wh['flux_capacity'] * wh['stability'] 
+                         for wh in model.wormhole_connections]
+        if wormhole_fluxes:
+            ax4.hist(wormhole_fluxes, bins=20, color='green', alpha=0.7)
+            ax4.set_title('Wormhole Flux Distribution')
+            ax4.set_xlabel('Flux')
+            ax4.set_ylabel('Count')
+        else:
+            ax4.text(0.5, 0.5, 'No Active Wormholes', 
+                    ha='center', va='center', transform=ax4.transAxes)
+        
+        # 5. 能量/质量统计
+        ax5 = fig.add_subplot(235)
+        earth_mass = sum(model.nodes[n]['mass'] for n in model.nodes 
+                        if model.nodes[n]['type'] == 'earth')
+        bh_mass = sum(model.nodes[n]['mass'] for n in model.nodes 
+                     if model.nodes[n]['type'] == 'blackhole')
+        de_energy = sum(model.nodes[n]['energy'] for n in model.nodes 
+                       if model.nodes[n]['type'] == 'darkenergy')
+        
+        ax5.bar(['Earth Mass', 'BH Mass', 'DE Energy'], 
+               [earth_mass, bh_mass, de_energy],
+               color=['blue', 'red', 'purple'])
+        ax5.set_title('Mass/Energy Distribution')
+        ax5.tick_params(axis='x', rotation=45)
+        
+        # 6. 时间荷历史（如果可用）
+        ax6 = fig.add_subplot(236)
+        if hasattr(model, 'time_charge_history') and model.time_charge_history:
+            history = model.time_charge_history
+            steps = [h['step'] for h in history]
+            t1 = [h['t1'] for h in history]
+            t2 = [h['t2'] for h in history]
+            t3 = [h['t3'] for h in history]
+            
+            ax6.plot(steps, t1, 'r-', label='T1')
+            ax6.plot(steps, t2, 'g-', label='T2')
+            ax6.plot(steps, t3, 'b-', label='T3')
+            ax6.set_title('Time Charge Evolution')
+            ax6.set_xlabel('Iteration')
+            ax6.set_ylabel('Charge')
+            ax6.legend()
+        else:
+            ax6.text(0.5, 0.5, 'No Time Charge History', 
+                    ha='center', va='center', transform=ax6.transAxes)
+        
+        plt.tight_layout()
+        plt.savefig(f'{output_dir}/iteration_{iteration:04d}.png', 
+                   dpi=150, bbox_inches='tight')
+        plt.close(fig)
+        print(f"  Saved visualization for iteration {iteration}")
+        
+    except Exception as e:
+        print(f"  Error generating iteration visualization: {e}")
+        import traceback
+        traceback.print_exc()
+
 def evolve_advanced_hypergraph_ml(model, n_iterations=1000):
     """
     演化高级超图模型（深度学习增强版）
     """
     print(f"开始演化高级六维流形时空模型（深度学习增强），共 {n_iterations} 个时间步...")
+    
+    # 创建输出目录
+    os.makedirs('evolution_visualization', exist_ok=True)
+    os.makedirs('evolution_visualization/3d_frames', exist_ok=True)
+    os.makedirs('iteration_visualizations', exist_ok=True)
     
     # 初始化CSV记录
     csv_file = 'advanced_spacetime_evolution_ml.csv'
@@ -1637,6 +1905,23 @@ def evolve_advanced_hypergraph_ml(model, n_iterations=1000):
             'unet_features_avg', 'grid_resolution', 'learning_rate'
         ])
     
+    # 初始化历史记录
+    history = {
+        'iterations': [],
+        'earth_nodes': [],
+        'blackhole_nodes': [],
+        'darkenergy_nodes': [],
+        'earth_mass': [],
+        'blackhole_mass': [],
+        'darkenergy_energy': [],
+        'time_charge_t1': [],
+        'time_charge_t2': [],
+        'time_charge_t3': [],
+        'wormhole_count': [],
+        'wormhole_flux': [],
+        'unet_features': []
+    }
+    
     for iteration in range(n_iterations):
         model.time_step = iteration
         
@@ -1646,8 +1931,13 @@ def evolve_advanced_hypergraph_ml(model, n_iterations=1000):
         # 记录统计（高级版）
         model.record_evolution_statistics_advanced()
         
-        # 每30步生成可视化和记录详细数据
-        if iteration % 30 == 0:
+        # 每100步生成详细可视化
+        if iteration % 100 == 0 and iteration > 0:
+            print(f"时间步 {iteration}: 生成详细3D可视化和指标")
+            visualize_iteration_state(model, iteration)
+            
+        # 每50步生成基本可视化和记录详细数据
+        if iteration % 50 == 0 or iteration == n_iterations - 1:
             print(f"时间步 {iteration}: 生成深度学习增强可视化和记录数据")
             
             # 统计当前状态
@@ -1673,6 +1963,21 @@ def evolve_advanced_hypergraph_ml(model, n_iterations=1000):
                     unet_feature_stats.append(np.mean(np.abs(node['unet_features'])))
             avg_unet_features = np.mean(unet_feature_stats) if unet_feature_stats else 0
             
+            # 更新历史记录
+            history['iterations'].append(iteration)
+            history['earth_nodes'].append(earth_count)
+            history['blackhole_nodes'].append(bh_count)
+            history['darkenergy_nodes'].append(de_count)
+            history['earth_mass'].append(earth_mass)
+            history['blackhole_mass'].append(bh_mass)
+            history['darkenergy_energy'].append(de_energy)
+            history['time_charge_t1'].append(total_time_charge[0])
+            history['time_charge_t2'].append(total_time_charge[1])
+            history['time_charge_t3'].append(total_time_charge[2])
+            history['wormhole_count'].append(len(model.wormhole_connections))
+            history['wormhole_flux'].append(total_wormhole_flux)
+            history['unet_features'].append(avg_unet_features)
+            
             # 写入CSV
             with open(csv_file, 'a', newline='') as f:
                 writer = csv.writer(f)
@@ -1684,6 +1989,7 @@ def evolve_advanced_hypergraph_ml(model, n_iterations=1000):
                     avg_unet_features, model.grid_resolution, model.learning_rate
                 ])
             
+            print(f"时间步 {iteration}:")
             print(f"  地球子时空: {earth_count} 节点")
             print(f"  黑洞子时空: {bh_count} 节点")
             print(f"  暗能量子时空: {de_count} 节点")
@@ -1693,13 +1999,56 @@ def evolve_advanced_hypergraph_ml(model, n_iterations=1000):
             
             # 生成高级可视化
             try:
-                fig = model.create_3d_visualization_advanced()
-                os.makedirs('advanced_spacetime_frames_ml', exist_ok=True)
-                plt.savefig(f'advanced_spacetime_frames_ml/frame_{iteration:04d}.png',
-                            dpi=120, bbox_inches='tight', facecolor='black')
-                plt.close(fig)
+                # 1. 3D可视化
+                fig_3d = model.create_3d_visualization_advanced()
+                fig_3d.savefig(f'evolution_visualization/3d_frames/frame_{iteration:04d}.png',
+                             dpi=120, bbox_inches='tight', facecolor='black')
+                plt.close(fig_3d)
+                
+                # 2. 演化指标可视化
+                plot_evolution_metrics(history, f'evolution_visualization/metrics_{iteration:04d}.png')
+                
+                # 3. 生成当前状态的快照
+                plt.figure(figsize=(12, 6))
+                
+                # 节点类型分布
+                plt.subplot(1, 2, 1)
+                node_types = [model.nodes[n]['type'] for n in model.nodes]
+                type_counts = {
+                    'earth': node_types.count('earth'),
+                    'blackhole': node_types.count('blackhole'),
+                    'darkenergy': node_types.count('darkenergy')
+                }
+                plt.pie(type_counts.values(), labels=type_counts.keys(), autopct='%1.1f%%',
+                       colors=['green', 'red', 'blue'])
+                plt.title(f'节点类型分布 (t={iteration})')
+                
+                # 虫洞通量分布
+                plt.subplot(1, 2, 2)
+                wormhole_fluxes = [wh['flux_capacity'] * wh['stability'] 
+                                 for wh in model.wormhole_connections]
+                if wormhole_fluxes:
+                    plt.hist(wormhole_fluxes, bins=20, color='purple', alpha=0.7)
+                    plt.title('虫洞通量分布')
+                    plt.xlabel('通量')
+                    plt.ylabel('数量')
+                else:
+                    plt.text(0.5, 0.5, '无活跃虫洞', 
+                            horizontalalignment='center',
+                            verticalalignment='center',
+                            transform=plt.gca().transAxes)
+                
+                plt.tight_layout()
+                plt.savefig(f'evolution_visualization/snapshot_{iteration:04d}.png',
+                          dpi=120, bbox_inches='tight')
+                plt.close()
+                
+                print(f"  已保存可视化结果到 evolution_visualization/ 目录")
+                
             except Exception as e:
                 print(f"  可视化生成失败: {e}")
+                import traceback
+                traceback.print_exc()
         
         # 每80步应用重写规则
         if iteration % 80 == 0:

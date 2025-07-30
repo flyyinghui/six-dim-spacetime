@@ -43,6 +43,12 @@ class SixDimensionalSpacetimeHypergraphAdvanced:
         self.lambda_ent = 0.5  # t2,t3纠缠传输系数
         self.tau_threshold = 0.05  # 守恒阈值
         
+        # 时间荷耦合常数 (μ₁, μ₂, μ₃)
+        self.time_charge_coupling = np.array([1.0, 1.0, 1.0])
+        
+        # 时间荷历史记录
+        self.time_charge_history = []
+        
         # 虫洞效应参数
         self.wormhole_strength = 0.2
         self.negative_energy_density = -0.1
@@ -139,35 +145,161 @@ class SixDimensionalSpacetimeHypergraphAdvanced:
             
         return metric
 
-    def calculate_time_charge_density(self, node_id):
+    def calculate_time_charge_density(self, node_id=None, nodes_dict=None):
         """
-        计算节点的三维时间荷密度
+        计算节点的三维时间荷密度 Q_T^μ
+        支持批量计算和单个节点计算
+        
+        参数:
+            node_id: 节点ID，如果为None则使用nodes_dict
+            nodes_dict: 节点字典，批量计算时使用
+            
+        返回:
+            形状 (3,) 或 (n_nodes, 3) 的 numpy 数组，
+            分量对应 (Q_t1, Q_t2, Q_t3)
         """
-        node = self.nodes[node_id]
-        mass = node.get('mass', 1.0)
-        tc = node.get('time_coords', [0.0])
-        
-        t1 = tc[0] if len(tc) >= 1 else 0.0
-        t2 = tc[1] if len(tc) >= 2 else 0.0
-        t3 = tc[2] if len(tc) >= 3 else 0.0
-        
-        if node['type'] == 'earth':
-            return np.array([mass * t1, 0.0, 0.0])
-        elif node['type'] == 'blackhole':
-            return np.array([mass * t1, mass * t2, mass * t3])
-        elif node['type'] == 'darkenergy':
-            return np.array([0.0, mass * t2, mass * t3])
+        if node_id is not None:
+            # 单个节点计算
+            node = self.nodes[node_id]
+            mass = node.get('mass', 1.0)
+            tc = node.get('time_coords', [0.0, 0.0, 0.0])
+            
+            # 确保时间坐标有3个分量
+            t1 = tc[0] if len(tc) >= 1 else 0.0
+            t2 = tc[1] if len(tc) >= 2 else 0.0
+            t3 = tc[2] if len(tc) >= 3 else 0.0
+            
+            # 根据节点类型应用掩码
+            if node['type'] == 'earth':
+                # 地球节点只贡献 t1 维度
+                return np.array([mass * t1, 0.0, 0.0])
+            elif node['type'] == 'blackhole':
+                # 黑洞节点贡献所有维度
+                return np.array([mass * t1, mass * t2, mass * t3])
+            elif node['type'] == 'darkenergy':
+                # 暗能量节点只贡献 t2, t3 维度
+                return np.array([0.0, mass * t2, mass * t3])
+            else:
+                return np.zeros(3)
         else:
-            return np.zeros(3)
+            # 批量计算
+            n_nodes = len(nodes_dict)
+            Q = np.zeros((n_nodes, 3))
+            
+            for i, (nid, node) in enumerate(nodes_dict.items()):
+                mass = node.get('mass', 1.0)
+                tc = node.get('time_coords', [0.0, 0.0, 0.0])
+                
+                # 确保时间坐标有3个分量
+                t1 = tc[0] if len(tc) >= 1 else 0.0
+                t2 = tc[1] if len(tc) >= 2 else 0.0
+                t3 = tc[2] if len(tc) >= 3 else 0.0
+                
+                # 根据节点类型应用掩码
+                if node['type'] == 'earth':
+                    Q[i] = [mass * t1, 0.0, 0.0]
+                elif node['type'] == 'blackhole':
+                    Q[i] = [mass * t1, mass * t2, mass * t3]
+                elif node['type'] == 'darkenergy':
+                    Q[i] = [0.0, mass * t2, mass * t3]
+                # 其他类型默认为0
+                
+            return Q
 
     def get_total_time_charge(self):
         """
         计算全局时间荷总量
+        返回形状 (3,) 的 numpy 数组，
+        分量对应 (T1, T2, T3)
         """
         total = np.zeros(3)
         for nid in self.nodes:
             total += self.calculate_time_charge_density(nid)
         return total
+        
+    def _enforce_time_charge_conservation(self, initial_tau):
+        """
+        强制时间荷守恒
+        对全局时间荷偏差进行分配修正，保证 ∑_nodes Q_T^μ = 0
+        
+        参数:
+            initial_tau: 初始时间荷总量 (3,)
+        """
+        # 1. 计算当前时间荷总量
+        current_tau = self.get_total_time_charge()
+        
+        # 2. 计算各类型节点的质量总和和掩码
+        mass_earth = 0.0
+        mass_blackhole = 0.0
+        mass_darkenergy = 0.0
+        
+        # 获取所有节点的时间坐标
+        for node_id, node in self.nodes.items():
+            mass = node.get('mass', 1.0)
+            if node['type'] == 'earth':
+                mass_earth += mass
+            elif node['type'] == 'blackhole':
+                mass_blackhole += mass
+            elif node['type'] == 'darkenergy':
+                mass_darkenergy += mass
+        
+        # 3. 计算各类型节点的质量权重
+        total_mass = mass_earth + mass_blackhole + mass_darkenergy
+        if total_mass == 0:
+            return  # 避免除以零
+            
+        # 4. 计算时间荷偏差
+        delta_tau = current_tau - initial_tau
+        
+        # 5. 计算校正系数
+        denom = np.array([
+            mass_earth / (self.time_charge_coupling[0] + 1e-12),
+            mass_blackhole / (self.time_charge_coupling[1] + 1e-12),
+            mass_darkenergy / (self.time_charge_coupling[2] + 1e-12)
+        ])
+        
+        # 避免除以零
+        denom[denom == 0] = 1e-12
+        alpha = -delta_tau / denom
+        
+        # 6. 应用校正
+        for node_id, node in self.nodes.items():
+            # 确保时间坐标存在且有3个分量
+            if 'time_coords' not in node:
+                node['time_coords'] = [0.0, 0.0, 0.0]
+                
+            tc = node['time_coords']
+            if len(tc) < 3:
+                tc.extend([0.0] * (3 - len(tc)))
+            elif len(tc) > 3:
+                tc = tc[:3]
+            
+            # 根据节点类型应用校正
+            if node['type'] == 'earth':
+                # 地球节点只修正 t1 维度
+                tc[0] += alpha[0] / (self.time_charge_coupling[0] + 1e-12)
+            elif node['type'] == 'blackhole':
+                # 黑洞节点修正所有维度
+                for i in range(3):
+                    tc[i] += alpha[i] / (self.time_charge_coupling[i] + 1e-12)
+            elif node['type'] == 'darkenergy':
+                # 暗能量节点修正 t2, t3 维度
+                for i in range(1, 3):
+                    tc[i] += alpha[i] / (self.time_charge_coupling[i] + 1e-12)
+            
+            # 更新节点的时间坐标
+            node['time_coords'] = tc
+        
+        # 7. 记录时间荷历史
+        self.time_charge_history.append({
+            'step': self.time_step,
+            't1': current_tau[0],
+            't2': current_tau[1],
+            't3': current_tau[2]
+        })
+        
+        # 8. 返回修正后的时间荷
+        return self.get_total_time_charge()
 
     def detect_wormhole_conditions(self, earth_node, de_node):
         """
@@ -684,7 +816,7 @@ class SixDimensionalSpacetimeHypergraphAdvanced:
         self.update_wormhole_dynamics()
         
         # 5. 时间荷守恒校正
-        self._enforce_time_charge_conservation(initial_tau)
+        final_tau = self._enforce_time_charge_conservation(initial_tau)
         
         # 6. 应用Wolfram重写规则
         if self.time_step % 10 == 0:
@@ -692,6 +824,10 @@ class SixDimensionalSpacetimeHypergraphAdvanced:
         
         # 7. 更新度规和几何
         self._update_spacetime_geometry()
+        
+        # 8. 记录时间荷变化
+        if hasattr(self, 'history') and 'time_charges' in self.history:
+            self.history['time_charges'].append(final_tau.tolist())
 
     def _update_gravity_effects(self):
         """
@@ -1232,3 +1368,4 @@ def main():
 
 if __name__ == "__main__":
     model = main()
+
